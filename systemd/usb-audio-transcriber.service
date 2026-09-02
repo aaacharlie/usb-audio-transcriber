@@ -1,0 +1,8 @@
+[Unit]
+Description=USB audio ingest and transcription cycle
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/share/usb-audio-transcriber/bin/run-cycle.sh
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll removable media for audio recordings
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

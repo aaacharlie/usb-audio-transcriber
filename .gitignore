@@ -1,0 +1,30 @@
+# Local configuration and credentials
+config.env
+config.env.*
+!config.example.env
+
+# Python environments and caches
+venv/
+__pycache__/
+*.py[cod]
+
+# Runtime data: recordings, transcripts, logs, progress, and deduplication state
+var/
+archive/
+queue/
+vault/
+transcripts/
+*.sqlite
+*.sqlite-*
+
+# Imported media and generated transcript artifacts
+*.wav
+*.mp3
+*.m4a
+*.json
+*.txt
+
+# Editor and OS artifacts
+.DS_Store
+.vscode/
+.idea/
