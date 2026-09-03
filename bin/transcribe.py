@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Transcribe queued audio with faster-whisper and write Markdown notes."""
+import gc
 import json
 import os
 import sqlite3
@@ -9,13 +10,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from model_profiles import artifact_path, artifacts_complete, profiles_for_config
 from pipeline_config import load, log, write_progress
 
 CFG = load()
 QUEUE = Path(CFG["QUEUE_DIR"])
 VAULT = Path(CFG["VAULT_DIR"])
 STATE_DB = Path(CFG["STATE_DB"])
-MODEL_NAME = CFG.get("WHISPER_MODEL", "medium.en")
+MODEL_PROFILES = profiles_for_config(CFG)
 DEVICE = CFG.get("WHISPER_DEVICE", "cpu")
 COMPUTE = CFG.get("WHISPER_COMPUTE", "int8")
 LANG = CFG.get("WHISPER_LANG", "en") or None
@@ -99,19 +101,24 @@ def summarize(transcript):
         return None
 
 
-def write_note(audio, segments, duration, summary_md):
+def write_note(audio, segments, duration, summary_md, profile, comparison=False):
     timestamp = datetime.fromtimestamp(audio.stat().st_mtime)
     VAULT.mkdir(parents=True, exist_ok=True)
-    note = VAULT / f"{timestamp:%Y-%m-%d} {timestamp:%H%M} transcript.md"
+    profile_suffix = f" {profile.key}" if comparison else ""
+    note = VAULT / f"{timestamp:%Y-%m-%d} {timestamp:%H%M} transcript{profile_suffix}.md"
     number = 1
     while note.exists():
-        note = VAULT / f"{timestamp:%Y-%m-%d} {timestamp:%H%M} transcript {number}.md"
+        note = VAULT / (
+            f"{timestamp:%Y-%m-%d} {timestamp:%H%M} "
+            f"transcript{profile_suffix} {number}.md"
+        )
         number += 1
     speech = sum(segment["end"] - segment["start"] for segment in segments)
     lines = ["---", f"date: {timestamp:%Y-%m-%d}", f"time: {timestamp:%H:%M}",
              "type: transcript", "source: recorder", f"audio: {audio}",
              f"duration_min: {round(duration / 60, 1)}",
-             f"speech_min: {round(speech / 60, 1)}", f"model: {MODEL_NAME}",
+             f"speech_min: {round(speech / 60, 1)}", f"model: {profile.model_id}",
+             f"model_profile: {profile.key}",
              "tags: [transcript, inbox]", "---", "",
              f"# {timestamp:%A, %B %d %Y} - {timestamp:%H:%M}", ""]
     if summary_md:
@@ -136,60 +143,83 @@ def main():
         write_progress(active=False, phase="Queue empty", total_files=0, files_completed=0)
         return 0
 
-    total_files, completed = len(pending), 0
-    write_progress(active=True, phase="Loading Whisper model", total_files=total_files,
-                   files_completed=completed, current_file=pending[0].name, current_percent=0)
-    log(f"Loading '{MODEL_NAME}' on {DEVICE}/{COMPUTE} ...")
-    model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE,
-                         cpu_threads=os.cpu_count() or 8)
+    comparison = len(MODEL_PROFILES) > 1
+    total_work = len(pending) * len(MODEL_PROFILES)
+    completed = 0
     con = sqlite3.connect(STATE_DB)
+    for profile in MODEL_PROFILES:
+        phase = f"Loading {profile.label}"
+        write_progress(active=True, phase=phase, total_files=total_work,
+                       files_completed=completed, current_file=pending[0].name,
+                       current_percent=0)
+        log(f"Loading '{profile.model_id}' on {DEVICE}/{COMPUTE} ...")
+        model = WhisperModel(profile.model_id, device=DEVICE, compute_type=COMPUTE,
+                             cpu_threads=os.cpu_count() or 8)
+        for item in pending:
+            audio = item.resolve()
+            if not audio.exists():
+                completed += 1
+                continue
+            if comparison and artifacts_complete(audio, profile, comparison=True):
+                log(f"Skipping completed {profile.key} pass for {audio.name}")
+                completed += 1
+                continue
+            log(f"Transcribing {audio.name} with {profile.model_id} ...")
+            started = time.time()
+            write_progress(active=True, phase=f"Transcribing ({profile.label})",
+                           total_files=total_work, files_completed=completed,
+                           current_file=audio.name,
+                           current_percent=0,
+                           eta_seconds=None)
+            kwargs = {"language": LANG, "beam_size": 5}
+            if VAD:
+                kwargs.update(vad_filter=True,
+                              vad_parameters={"min_silence_duration_ms": VAD_MS})
+            segment_iter, info = model.transcribe(str(audio), **kwargs)
+            segments, last_update = [], 0.0
+            for segment in segment_iter:
+                segments.append({"start": segment.start, "end": segment.end,
+                                 "text": segment.text})
+                now = time.time()
+                if now - last_update >= 1:
+                    file_percent = min(99, int((segment.end / info.duration) * 100)) \
+                        if info.duration else 0
+                    elapsed = now - started
+                    eta = int(elapsed * (100 - file_percent) / file_percent) \
+                        if file_percent else None
+                    write_progress(active=True,
+                                   phase=f"Transcribing ({profile.label})",
+                                   total_files=total_work, files_completed=completed,
+                                   current_file=audio.name, current_percent=file_percent,
+                                   eta_seconds=eta)
+                    last_update = now
+            if not segments:
+                log("  no speech detected, skipping")
+                completed += 1
+                continue
+            artifact_path(audio, profile, ".json", comparison).write_text(
+                json.dumps({"duration": info.duration, "model": profile.model_id,
+                            "profile": profile.key, "segments": segments}, indent=2),
+                encoding="utf-8")
+            full_text = " ".join(segment["text"].strip() for segment in segments)
+            artifact_path(audio, profile, ".txt", comparison).write_text(
+                full_text, encoding="utf-8")
+            note = write_note(audio, segments, info.duration, summarize(full_text),
+                              profile, comparison)
+            elapsed = time.time() - started
+            log(f"  {profile.key} done in {hhmmss(elapsed)} "
+                f"({info.duration / elapsed:.1f}x realtime) -> {note.name}")
+            completed += 1
+        del model
+        gc.collect()
+
     for item in pending:
         audio = item.resolve()
-        if not audio.exists():
-            item.unlink(missing_ok=True)
-            continue
-        log(f"Transcribing {audio.name} ...")
-        started = time.time()
-        write_progress(active=True, phase="Transcribing", total_files=total_files,
-                       files_completed=completed, current_file=audio.name,
-                       current_percent=0, eta_seconds=None)
-        kwargs = {"language": LANG, "beam_size": 5}
-        if VAD:
-            kwargs.update(vad_filter=True, vad_parameters={"min_silence_duration_ms": VAD_MS})
-        segment_iter, info = model.transcribe(str(audio), **kwargs)
-        segments, last_update = [], 0.0
-        for segment in segment_iter:
-            segments.append({"start": segment.start, "end": segment.end, "text": segment.text})
-            now = time.time()
-            if now - last_update >= 1:
-                current = min(99, int((segment.end / info.duration) * 100)) if info.duration else 0
-                elapsed = now - started
-                eta = int(elapsed * (100 - current) / current) if current else None
-                write_progress(active=True, phase="Transcribing", total_files=total_files,
-                               files_completed=completed, current_file=audio.name,
-                               current_percent=current, eta_seconds=eta)
-                last_update = now
-        if not segments:
-            log("  no speech detected, skipping")
-            item.unlink(missing_ok=True)
-            completed += 1
-            continue
-        audio.with_suffix(".json").write_text(
-            json.dumps({"duration": info.duration, "segments": segments}, indent=2), encoding="utf-8")
-        full_text = " ".join(segment["text"].strip() for segment in segments)
-        audio.with_suffix(".txt").write_text(full_text, encoding="utf-8")
-        note = write_note(audio, segments, info.duration, summarize(full_text))
-        elapsed = time.time() - started
-        log(f"  done in {hhmmss(elapsed)} ({info.duration / elapsed:.1f}x realtime) -> {note.name}")
         con.execute("UPDATE seen SET transcribed=1 WHERE archived_to=?", (str(audio),))
         con.commit()
         item.unlink(missing_ok=True)
-        completed += 1
-        write_progress(active=True, phase="Preparing next file", total_files=total_files,
-                       files_completed=completed, current_file=audio.name,
-                       current_percent=100, eta_seconds=0)
     con.close()
-    write_progress(active=False, phase="Transcription complete", total_files=total_files,
+    write_progress(active=False, phase="Transcription complete", total_files=total_work,
                    files_completed=completed, current_percent=100, eta_seconds=0)
     return 0
 

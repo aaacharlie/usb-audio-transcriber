@@ -37,7 +37,7 @@ def message(state):
         lines.append(f"Files: {completed}/{total} complete")
     if current:
         lines.append(f"Current: {current}")
-    if state.get("active") and phase == "Transcribing":
+    if state.get("active") and phase.startswith("Transcribing"):
         lines.append(format_eta(state.get("eta_seconds")))
     return "\n".join(lines)
 
