@@ -264,8 +264,10 @@ def main():
 
         for item in pending:
             audio = item.resolve()
-            con.execute("UPDATE seen SET transcribed=1 WHERE archived_to=?", (str(audio),))
-            con.commit()
+            if audio.exists():
+                con.execute("UPDATE seen SET transcribed=1 WHERE archived_to=?",
+                            (str(audio),))
+                con.commit()
             item.unlink(missing_ok=True)
     finally:
         con.close()

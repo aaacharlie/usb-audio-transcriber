@@ -6,6 +6,7 @@ exec 9>"$ROOT/var/state/cycle.lock"
 flock -n 9 || { echo "cycle already running, skipping"; exit 0; }
 {
   "$ROOT/venv/bin/python" "$ROOT/bin/ingest.py"
-  "$ROOT/venv/bin/python" "$ROOT/bin/progress-popup.py" &
+  "$ROOT/venv/bin/python" "$ROOT/bin/progress-popup.py" \
+    >>"$ROOT/var/logs/pipeline.log" 2>&1 9>&- &
   "$ROOT/venv/bin/python" "$ROOT/bin/transcribe.py"
 } 2>&1 | tee -a "$ROOT/var/logs/pipeline.log"

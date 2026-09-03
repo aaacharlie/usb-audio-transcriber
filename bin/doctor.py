@@ -60,10 +60,10 @@ def check_config(config):
     return failures
 
 
-def writable_parent(path):
+def writable_parent(path, is_file=False):
     """Return the nearest existing parent so checks do not create user data."""
     candidate = Path(path).expanduser()
-    if candidate.suffix:
+    if is_file:
         candidate = candidate.parent
     while not candidate.exists() and candidate != candidate.parent:
         candidate = candidate.parent
@@ -103,7 +103,7 @@ def main(argv=None):
         else:
             print(f"OK  configuration: {args.config}")
 
-    for command in ("ffmpeg", "zenity"):
+    for command in ("ffmpeg", "zenity", "flock", "tee"):
         location = shutil.which(command)
         if location:
             print(f"OK  command: {command} ({location})")
@@ -121,7 +121,7 @@ def main(argv=None):
             value = config.get(setting, "").strip()
             if not value:
                 continue
-            parent = writable_parent(value)
+            parent = writable_parent(value, is_file=setting == "STATE_DB")
             if parent is not None and os.access(parent, os.W_OK | os.X_OK):
                 print(f"OK  writable path for {setting}: {parent}")
             else:

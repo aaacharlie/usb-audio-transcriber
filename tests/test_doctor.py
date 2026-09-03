@@ -90,7 +90,52 @@ class DoctorConfigTests(unittest.TestCase):
         self.assertIn("MAP_WINDOW_CHARS must be a positive integer", failures)
 
 
+class DoctorPathTests(unittest.TestCase):
+    def test_writable_parent_checks_dotted_directories_themselves(self):
+        with tempfile.TemporaryDirectory() as directory:
+            dotted = Path(directory) / "notes.d"
+            dotted.mkdir()
+
+            self.assertEqual(doctor.writable_parent(dotted), dotted)
+
+    def test_writable_parent_checks_the_parent_of_file_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state"
+            state.mkdir()
+
+            self.assertEqual(
+                doctor.writable_parent(state / "seen.sqlite", is_file=True),
+                state,
+            )
+
+
 class DoctorCliTests(unittest.TestCase):
+    def test_main_fails_when_a_runtime_command_is_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.env"
+            config_path.write_text(
+                f'ARCHIVE_DIR="{directory}/archive"\n'
+                f'QUEUE_DIR="{directory}/queue"\n'
+                f'STATE_DB="{directory}/state/seen.sqlite"\n'
+                f'VAULT_DIR="{directory}/transcripts"\n'
+                'AUDIO_EXTS="wav"\n',
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with mock.patch(
+                        "shutil.which",
+                        side_effect=lambda command:
+                        None if command == "flock" else "/usr/bin/tool",
+                    ), \
+                    mock.patch("importlib.util.find_spec", return_value=object()), \
+                    mock.patch("sys.stdout", output):
+                result = doctor.main([
+                    "--config", str(config_path), "--skip-systemd"
+                ])
+
+            self.assertEqual(result, 1)
+            self.assertIn("FAIL command: flock not found", output.getvalue())
+
     def test_main_reports_a_healthy_local_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

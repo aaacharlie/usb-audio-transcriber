@@ -27,7 +27,7 @@ class InstallTests(unittest.TestCase):
                 encoding="utf-8",
             )
             python.chmod(python.stat().st_mode | stat.S_IXUSR)
-            data_home = root / "custom data"
+            data_home = root / "custom data & 100%"
             config_home = root / "custom config"
             env = os.environ | {
                 "HOME": str(root / "home"),
@@ -49,8 +49,9 @@ class InstallTests(unittest.TestCase):
                 config_home / "systemd" / "user" /
                 "usb-audio-transcriber.service"
             ).read_text(encoding="utf-8")
+            escaped_root = str(data_home).replace("%", "%%")
             self.assertIn(
-                f'ExecStart="{data_home}/usb-audio-transcriber/bin/run-cycle.sh"',
+                f'ExecStart="{escaped_root}/usb-audio-transcriber/bin/run-cycle.sh"',
                 service,
             )
             self.assertIn("UMask=0077", service)

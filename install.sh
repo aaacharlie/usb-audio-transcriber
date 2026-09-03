@@ -19,11 +19,20 @@ command -v systemctl >/dev/null || { echo "systemctl is required" >&2; exit 1; }
 
 mkdir -p "$INSTALL_ROOT" "$UNIT_DIR"
 
-# Dependencies install first so a pip failure cannot damage an existing
-# working deployment of the program files.
+# Dependencies install and the doctor gate both run before deployed program
+# files are replaced, so neither a pip failure nor a rejected configuration
+# can leave an existing installation half upgraded.
 python3 -m venv "$INSTALL_ROOT/venv"
 "$INSTALL_ROOT/venv/bin/pip" install --upgrade pip
 "$INSTALL_ROOT/venv/bin/pip" install -r "$SOURCE_ROOT/requirements.txt"
+
+if [ ! -f "$INSTALL_ROOT/config.env" ]; then
+  cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.env"
+  echo "Created $INSTALL_ROOT/config.env; edit it to select your output locations."
+fi
+chmod 600 "$INSTALL_ROOT/config.env"
+"$INSTALL_ROOT/venv/bin/python" "$SOURCE_ROOT/bin/doctor.py" \
+  --config "$INSTALL_ROOT/config.env" --skip-systemd
 
 for directory in bin systemd; do
   rm -rf "$INSTALL_ROOT/$directory"
@@ -31,18 +40,14 @@ for directory in bin systemd; do
 done
 cp "$SOURCE_ROOT/requirements.txt" "$INSTALL_ROOT/requirements.txt"
 cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
-if [ ! -f "$INSTALL_ROOT/config.env" ]; then
-  cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.env"
-  echo "Created $INSTALL_ROOT/config.env; edit it to select your output locations."
-fi
-chmod 600 "$INSTALL_ROOT/config.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py"
-"$INSTALL_ROOT/venv/bin/python" "$INSTALL_ROOT/bin/doctor.py" \
-  --config "$INSTALL_ROOT/config.env" --skip-systemd
 
 service=$(<"$SOURCE_ROOT/systemd/$APP_NAME.service")
-printf '%s\n' "${service//@INSTALL_ROOT@/$INSTALL_ROOT}" \
+# systemd expands % specifiers in unit files, and an unquoted patsub
+# replacement expands & on bash 5.2+, so escape/quote both.
+rendered_root="${INSTALL_ROOT//\%/%%}"
+printf '%s\n' "${service//@INSTALL_ROOT@/"$rendered_root"}" \
   > "$UNIT_DIR/$APP_NAME.service"
 cp "$SOURCE_ROOT/systemd/$APP_NAME.timer" "$UNIT_DIR/$APP_NAME.timer"
 systemctl --user daemon-reload

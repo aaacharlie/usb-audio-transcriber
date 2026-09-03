@@ -350,6 +350,10 @@ class TranscriberProfileTests(unittest.TestCase):
                 connection.execute(
                     "INSERT INTO seen VALUES (?, 0)", (str(audio),)
                 )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)",
+                    (str(root / "archive" / "deleted.wav"),),
+                )
                 connection.commit()
             module = load_transcriber({
                 "QUEUE_DIR": str(queue),
@@ -378,6 +382,16 @@ class TranscriberProfileTests(unittest.TestCase):
 
             self.assertTrue((queue / "meeting.wav.txt").exists())
             self.assertFalse(dangling.is_symlink())
+            with closing(sqlite3.connect(state_db)) as connection:
+                rows = dict(connection.execute(
+                    "SELECT archived_to, transcribed FROM seen"
+                ).fetchall())
+            self.assertEqual(rows[str(audio)], 1)
+            self.assertEqual(
+                rows[str(root / "archive" / "deleted.wav")], 0,
+                "an untranscribed recording must not be marked transcribed "
+                "just because its archive target was unreachable",
+            )
 
     def test_state_database_is_closed_when_transcription_fails(self):
         with tempfile.TemporaryDirectory() as directory:

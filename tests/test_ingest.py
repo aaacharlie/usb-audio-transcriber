@@ -210,6 +210,88 @@ class SensitiveFileModeTests(unittest.TestCase):
             self.assertTrue(source.exists())
 
 
+class QueueConflictTests(unittest.TestCase):
+    def test_stale_dangling_queue_entry_is_replaced_on_import(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "media" / "RECORD" / "meeting.wav"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"recording" * 1024)
+            ingest = load_ingest({
+                "ARCHIVE_DIR": str(root / "archive"),
+                "QUEUE_DIR": str(root / "queue"),
+                "STATE_DB": str(root / "state" / "seen.sqlite"),
+                "AUDIO_EXTS": "wav",
+                "RECORDER_DIR": "RECORD",
+                "PURGE_DEVICE": "0",
+            })
+            queue = root / "queue"
+            queue.mkdir()
+            with mock.patch.object(ingest, "archive_path_for") as naming:
+                naming.side_effect = lambda src: (
+                    root / "archive" / f"20260903-000000_{src.name}"
+                )
+                (root / "archive").mkdir()
+                stale = queue / "20260903-000000_meeting.wav"
+                stale.symlink_to(root / "archive" / "gone.wav")
+                with mock.patch.object(
+                            ingest, "find_candidates", return_value=[source]
+                        ), \
+                        mock.patch.object(ingest, "stable", return_value=True):
+                    self.assertEqual(ingest.main(), 0)
+
+            self.assertTrue(stale.is_symlink())
+            self.assertEqual(
+                stale.resolve(),
+                root / "archive" / "20260903-000000_meeting.wav",
+            )
+
+
+class DuplicateEfficiencyTests(unittest.TestCase):
+    def test_transcribed_duplicate_is_not_rehashed_when_purge_is_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "media" / "RECORD" / "meeting.wav"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"recording" * 1024)
+            archived = root / "archive" / "meeting.wav"
+            archived.parent.mkdir()
+            archived.write_bytes(source.read_bytes())
+            config = {
+                "ARCHIVE_DIR": str(root / "archive"),
+                "QUEUE_DIR": str(root / "queue"),
+                "STATE_DB": str(root / "state" / "seen.sqlite"),
+                "AUDIO_EXTS": "wav",
+                "RECORDER_DIR": "RECORD",
+                "PURGE_DEVICE": "0",
+            }
+            ingest = load_ingest(config)
+            digest = ingest.sha256(source)
+            with closing(ingest.init_db()) as connection:
+                connection.execute(
+                    "INSERT INTO seen "
+                    "(sha256, orig_name, archived_to, bytes, imported_at, transcribed) "
+                    "VALUES (?, ?, ?, ?, ?, 1)",
+                    (digest, source.name, str(archived), source.stat().st_size,
+                     "2026-09-02T00:00:00"),
+                )
+                connection.commit()
+            hashed = []
+            real_sha256 = ingest.sha256
+
+            def counting_sha256(path, *args, **kwargs):
+                hashed.append(Path(path))
+                return real_sha256(path, *args, **kwargs)
+
+            with mock.patch.object(ingest, "sha256", counting_sha256), \
+                    mock.patch.object(ingest, "find_candidates", return_value=[source]), \
+                    mock.patch.object(ingest, "stable", return_value=True):
+                self.assertEqual(ingest.main(), 0)
+
+            self.assertEqual(hashed, [source])
+            self.assertTrue(source.exists())
+
+
 class ConnectionLifetimeTests(unittest.TestCase):
     def tracking_connect(self, connections):
         real_connect = sqlite3.connect

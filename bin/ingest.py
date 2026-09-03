@@ -105,8 +105,12 @@ def ensure_queued(archived):
     """Create or validate the queue symlink for an archived recording."""
     link = QUEUE / archived.name
     if link.is_symlink():
-        return link.resolve() == archived.resolve()
-    if link.exists():
+        if link.resolve() == archived.resolve():
+            return True
+        if link.exists():
+            return False
+        link.unlink()  # stale dangling entry may be replaced safely
+    elif link.exists():
         return False
     os.symlink(archived, link)
     sync_directory(QUEUE)
@@ -142,17 +146,19 @@ def main():
             ).fetchone()
             if seen:
                 log(f"  dup  {src.name}")
-                archived = Path(seen[0]) if seen[0] else None
-                try:
-                    verified = archived is not None and archived.is_file() \
-                        and sha256(archived) == digest
-                except OSError:
-                    verified = False
                 queue_ready = bool(seen[1])
-                if verified and not seen[1]:
-                    queue_ready = ensure_queued(archived)
-                    if queue_ready:
-                        log("       pending archive is queued")
+                verified = False
+                if PURGE or not queue_ready:
+                    archived = Path(seen[0]) if seen[0] else None
+                    try:
+                        verified = archived is not None and archived.is_file() \
+                            and sha256(archived) == digest
+                    except OSError:
+                        verified = False
+                    if verified and not queue_ready:
+                        queue_ready = ensure_queued(archived)
+                        if queue_ready:
+                            log("       pending archive is queued")
                 if PURGE:
                     if verified and queue_ready:
                         src.unlink(missing_ok=True)
@@ -182,7 +188,9 @@ def main():
             )
             con.commit()
             if not ensure_queued(destination):
-                raise RuntimeError(f"queue path conflicts with archive: {destination.name}")
+                log(f"  !! queue name conflict for {destination.name}: "
+                    "not queued, source kept")
+                continue
             imported += 1
             if PURGE:
                 try:
