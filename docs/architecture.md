@@ -51,6 +51,6 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 
 1. Source media remains untouched unless purge is explicitly enabled.
 2. Archived recordings remain under `ARCHIVE_DIR` after transcription.
-3. Queue symlinks are removed after the configured transcription pass or passes complete.
+3. Each finished pass writes a `.complete.json` marker after its sidecars and note; queue symlinks are removed only after every configured pass has written durable outputs and its marker.
 4. Transcript artifacts next to the archived audio and Markdown notes in `VAULT_DIR` remain until the user removes them.
 5. Downloaded model weights remain in the Hugging Face cache until removed with `model-cache.py` or another cache-management tool.

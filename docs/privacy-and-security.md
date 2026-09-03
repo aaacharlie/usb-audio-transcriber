@@ -28,7 +28,12 @@ Treat transcripts as potentially sensitive. Before enabling summarization, verif
 
 ## Source deletion
 
-`PURGE_DEVICE=0` is the safe default. With `PURGE_DEVICE=1`, the source recording is removed only after a checksum-verified archive copy has been created. This is still destructive behavior: verify archive paths, backups, and available storage before enabling it.
+`PURGE_DEVICE=0` is the safe default. With `PURGE_DEVICE=1`, a newly imported
+source is removed only after a checksum-verified archive copy has been created.
+A duplicate source is removed only when the archive path recorded in SQLite
+still exists and matches the same SHA-256 digest. This is still destructive
+behavior: verify archive paths, backups, and available storage before enabling
+it.
 
 ## File permissions and backups
 

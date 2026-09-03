@@ -8,6 +8,14 @@ The installed configuration is:
 
 `install.sh` creates it from `config.example.env` only when it does not already exist, so reinstalling does not overwrite local settings.
 
+The installer validates the configuration before enabling the timer. Re-run the
+same validation after editing settings:
+
+```bash
+~/.local/share/usb-audio-transcriber/venv/bin/python \
+  ~/.local/share/usb-audio-transcriber/bin/doctor.py
+```
+
 ## Paths
 
 | Setting | Default | Meaning |
@@ -17,7 +25,9 @@ The installed configuration is:
 | `STATE_DB` | `${HOME}/usb-audio-transcriber-data/state/seen.sqlite` | SQLite deduplication and completion state |
 | `VAULT_DIR` | `${HOME}/usb-audio-transcriber-data/transcripts` | Markdown transcript notes; may point at an Obsidian vault folder |
 
-Environment variables such as `${HOME}` are expanded while loading the file.
+Environment variables such as `${HOME}` and a leading `~` are expanded while
+loading the file. The doctor requires each of these paths to be absolute after
+expansion and requires the four settings to name distinct locations.
 
 ## Discovery and source safety
 
@@ -68,3 +78,6 @@ If you edit the systemd unit itself rather than `config.env`, run:
 systemctl --user daemon-reload
 systemctl --user restart usb-audio-transcriber.timer
 ```
+
+The installer renders the service with the actual installation path, including
+custom `XDG_DATA_HOME` locations.

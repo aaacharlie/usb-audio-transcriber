@@ -8,15 +8,26 @@ ROOT = Path(__file__).resolve().parent.parent
 PROGRESS_PATH = ROOT / "var" / "state" / "progress.json"
 
 
-def load():
+def load(path=None):
     cfg = {}
-    for line in (ROOT / "config.env").read_text(encoding="utf-8").splitlines():
+    path = ROOT / "config.env" if path is None else Path(path)
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, val = line.split("=", 1)
-        cfg[key.strip()] = os.path.expandvars(val.strip().strip('"').strip("'"))
+        value = os.path.expandvars(val.strip().strip('"').strip("'"))
+        cfg[key.strip()] = os.path.expanduser(value)
     return cfg
+
+
+def sync_directory(path):
+    """Flush directory metadata so renames and unlinks survive power loss."""
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def log(msg):
