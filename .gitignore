@@ -23,6 +23,7 @@ transcripts/
 *.m4a
 *.json
 *.txt
+!requirements.txt
 
 # Editor and OS artifacts
 .DS_Store
