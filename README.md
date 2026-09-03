@@ -4,9 +4,68 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)](#requirements)
 
-A local-first Linux desktop utility that discovers recordings on mounted removable media, makes a checksum-verified archive, transcribes them with faster-whisper, and writes timestamped Markdown notes. A Zenity window shows detected files, active model, percentage, and a rolling completion estimate.
+**Plug in a voice recorder. Walk away. Come back to timestamped, searchable notes.**
 
-The safe default is `distil-large-v3` on CPU. Source recordings stay on the USB device, and transcription stays local unless optional OpenRouter text summarization is explicitly configured.
+USB Audio Transcriber is a free, open-source Linux desktop utility that turns a cheap voice recorder into a hands-off note-taking system. Plug the recorder in, and within about a minute the app finds the new recordings, copies them to a checksum-verified archive, transcribes them locally with faster-whisper, and writes timestamped Markdown notes you can drop straight into Obsidian or any notes folder. A small desktop window shows the detected files, the active model, the percentage done, and a rolling time estimate while it works.
+
+There is no subscription, no per-minute pricing, and no uploading of your audio. Transcription runs on your own CPU (`distil-large-v3` by default, no GPU required), source recordings stay on the USB device, and nothing leaves your machine unless you explicitly turn on the optional cloud summary.
+
+## Why use it
+
+- **Zero-touch workflow.** A user-level systemd timer does the watching. You never run a command after setup; new recordings are simply picked up.
+- **Genuinely free.** MIT-licensed, runs on hardware you already own, and pairs with a recorder that costs about as much as a few months of a paid transcription service.
+- **Private by default.** Audio never leaves your computer. The optional summarization step sends transcript text only, and only if you set an API key.
+- **Never loses a recording.** Every copy is SHA-256 verified before it enters the queue, duplicates are detected by content rather than filename, and the USB source is never deleted unless you opt in.
+- **Notes you can actually use.** Each note has YAML front matter (date, time, duration, model), a heading, and timestamped segments, so it is searchable and works in Obsidian out of the box.
+- **Pick your speed.** `fast` transcribed a 58-minute recording in about 17 minutes on a plain CPU. `accurate` is there for hard audio, and `both` gives you an A/B comparison from the same file.
+
+Good fits: lectures and classes, meetings and site visits, interviews, long phone calls on speaker, and voice memos you would otherwise never listen to again.
+
+## Real-world test: a $50 recorder from Amazon
+
+This project was built around, and tested with, an inexpensive magnetic voice-activated recorder that sells on Amazon for about $50. The listing is titled "136GB(9800H) Magnetic Voice Recorder - Zutiifeu Voice Activated Recorder with DSP5.0 Noise Cancellation HD Recording Device for Classe/Meeting/Lecture". It has been used with this pipeline with lots of success, and the combination is the whole point of the project: a budget recorder plus a Linux box you already own gives you a complete recording-to-notes system.
+
+What it looks like in practice:
+
+1. Record with the device. Voice activation means it can sit for hours and only capture the parts where someone is talking.
+2. Plug it into your Linux machine's USB port. The recorder mounts like an ordinary flash drive.
+3. Within about a minute the timer notices the new files, archives them, and starts transcribing. The progress window shows what it found and how long it expects to take.
+4. Open your notes folder. Every recording now has a dated, timestamped Markdown note there, plus plain-text and JSON transcripts stored beside the archived audio.
+
+Any recorder, phone, or SD card that mounts as a drive and saves into a folder should work the same way. Point `RECORDER_DIR` at the folder your device saves into (the default is `RECORD`) and add your device's file extension to `AUDIO_EXTS` if it is not `mp3`, `wav`, or `m4a`.
+
+This project has no affiliation with the recorder's manufacturer or with Amazon. It is simply the hardware the pipeline was tested on.
+
+## The transcript looks rough? Don't be discouraged
+
+Raw Whisper output from a pocket recorder can look underwhelming at first glance: no paragraphs, misheard names, a sentence that trails off where the voice activation paused, and long sessions split across several files. That is normal, and it is not the finished product.
+
+The raw transcript is the input to the last step. Give the transcript notes to a current frontier model (tested with GPT 5.6 Sol) and ask it to put them in order and summarize them. The model reads straight through the transcription noise, reconstructs the flow of the conversation, and returns a very high quality executive summary of the whole session.
+
+How to do it:
+
+1. Collect the Markdown notes for the session from your `VAULT_DIR`. Filenames start with each recording's date and time (for example `2026-09-03 1405 transcript.md`), so the correct order is already in the names.
+2. Upload or paste all of them into one chat with the model.
+3. Use a prompt like this one, replacing the bracketed part with the topic of the recording:
+
+```text
+You are the world's best transcript reader and interpreter, and you are very
+knowledgeable in [insert subject matter]. Can you take all of these audio
+transcript files and put them in the correct order and summarize it completely?
+Make it an amazing, coherent transcript summary in the proper order. Make it
+something better than other AI services like Otter.
+```
+
+Tips that make the summary better:
+
+- Name the subject matter precisely ("commercial real estate financing", "organic chemistry lecture", "quarterly planning meeting"). It helps the model fix misheard jargon and names.
+- Tell the model who was in the room, if you know, so it can attribute what was said.
+- Ask for decisions, action items, and open questions as separate sections if you want a meeting-style report.
+- Use a model with a large context window so a whole day's notes fit in one request.
+
+Prefer fully hands-off? Set `OPENROUTER_API_KEY` in `config.env` and the pipeline adds a Summary / Topics / Action Items / People & Entities block to the top of every note automatically. Transcript text only is sent; audio never leaves your machine. The built-in summary is convenient, and the manual pass with a top-tier model is the way to get the best final result.
+
+Either way, remember that pasting a transcript into a cloud AI sends its text to that provider. Keep sensitive recordings local.
 
 ## Documentation
 
