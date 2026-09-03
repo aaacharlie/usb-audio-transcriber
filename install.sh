@@ -25,7 +25,8 @@ fi
 python3 -m venv "$INSTALL_ROOT/venv"
 "$INSTALL_ROOT/venv/bin/pip" install --upgrade pip
 "$INSTALL_ROOT/venv/bin/pip" install -r "$INSTALL_ROOT/requirements.txt"
-chmod +x "$INSTALL_ROOT/bin/run-cycle.sh"
+chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
+  "$INSTALL_ROOT/bin/benchmark-models.py"
 
 cp "$SOURCE_ROOT/systemd/$APP_NAME.service" "$UNIT_DIR/$APP_NAME.service"
 cp "$SOURCE_ROOT/systemd/$APP_NAME.timer" "$UNIT_DIR/$APP_NAME.timer"

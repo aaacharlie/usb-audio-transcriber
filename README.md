@@ -70,10 +70,49 @@ The pipeline also logs to:
 
 - `AUDIO_EXTS`: comma-separated supported extensions.
 - `RECORDER_DIR`: directory name on removable media that contains recordings.
-- `WHISPER_MODEL`: faster-whisper model, default `distil-large-v3`.
+- `WHISPER_MODEL_PROFILE`: `fast`, `accurate`, or `both` (A/B comparison).
+- `WHISPER_MODEL`: legacy/custom model ID, used only when the profile is empty.
 - `WHISPER_DEVICE` / `WHISPER_COMPUTE`: defaults are `cpu` / `int8`.
 - `OPENROUTER_API_KEY`: optional cloud summarization; leave empty for fully local transcription.
 - `PURGE_DEVICE`: leave at `0` unless you explicitly want copied recordings removed from the USB device.
+
+### Whisper model choices
+
+| Profile | Model | Pros | Cons |
+| --- | --- | --- | --- |
+| `fast` | `distil-large-v3` | Fastest supported option; lower disk, RAM, and CPU cost | Can be less reliable on distant, overlapping, or otherwise difficult speech |
+| `accurate` | `large-v3` | Best accuracy-oriented option; more robust on difficult audio | Substantially slower on CPU; about 2.9 GiB of disk cache |
+| `both` | both models | Produces a direct A/B comparison from the same recording | Takes the combined runtime and disk space of both models |
+
+With `both`, JSON and text artifacts are labelled `.fast` and `.accurate`, and
+Markdown notes include the profile in their filenames. A queued recording is
+marked complete only after both passes finish.
+
+Models are loaded into RAM only while they are being used. Faster-whisper keeps
+downloaded weights in the Hugging Face disk cache so future runs do not download
+gigabytes again. Manage those independent caches explicitly:
+
+```bash
+python3 bin/model-cache.py status both
+python3 bin/model-cache.py download accurate
+python3 bin/model-cache.py remove accurate
+```
+
+Removing a cache frees disk space, but that model must be downloaded again before
+its next use. It is not possible to keep a model available offline without
+keeping its weights somewhere on disk.
+
+Run an isolated comparison without importing the recording into the live queue:
+
+```bash
+~/.local/share/usb-audio-transcriber/venv/bin/python \
+  ~/.local/share/usb-audio-transcriber/bin/benchmark-models.py \
+  /path/to/recording.wav --profile both
+```
+
+The benchmark loads one model at a time, writes model-labelled JSON and text
+files plus `comparison.json`, and does not modify the source recording, queue,
+SQLite state, or transcript vault.
 
 ## Uninstall
 
