@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a focused improvement
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What concrete workflow or limitation should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: safety
+    attributes:
+      label: Privacy, safety, and compatibility
+      description: Note any effect on recordings, deletion, cloud services, credentials, configuration, or existing installs.
+    validations:
+      required: true

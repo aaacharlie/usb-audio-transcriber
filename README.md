@@ -1,6 +1,23 @@
 # USB Audio Transcriber
 
-A Linux desktop utility that detects recordings on mounted removable media, makes a checksum-verified local archive, transcribes them with faster-whisper, and writes timestamped Markdown notes. A Zenity window shows file counts, transcription progress, and a rolling estimate of time remaining.
+[![CI](https://github.com/aaacharlie/usb-audio-transcriber/actions/workflows/ci.yml/badge.svg)](https://github.com/aaacharlie/usb-audio-transcriber/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)](#requirements)
+
+A local-first Linux desktop utility that discovers recordings on mounted removable media, makes a checksum-verified archive, transcribes them with faster-whisper, and writes timestamped Markdown notes. A Zenity window shows detected files, active model, percentage, and a rolling completion estimate.
+
+The safe default is `distil-large-v3` on CPU. Source recordings stay on the USB device, and transcription stays local unless optional OpenRouter text summarization is explicitly configured.
+
+## Documentation
+
+- [Usage guide](docs/usage.md)
+- [Configuration reference](docs/configuration.md)
+- [Whisper model profiles and measured trade-offs](docs/model-profiles.md)
+- [Architecture and data lifecycle](docs/architecture.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Privacy and security](docs/privacy-and-security.md)
+- [Development guide](docs/development.md)
+- [GitHub wiki](https://github.com/aaacharlie/usb-audio-transcriber/wiki)
 
 ## What it does
 
@@ -32,6 +49,17 @@ On Ubuntu/Debian:
 sudo apt install python3-venv ffmpeg zenity
 ```
 
+## Quick start
+
+```bash
+git clone https://github.com/aaacharlie/usb-audio-transcriber.git
+cd usb-audio-transcriber
+./install.sh
+$EDITOR ~/.local/share/usb-audio-transcriber/config.env
+```
+
+Set `VAULT_DIR` to the folder where Markdown notes should be written, then plug in or mount media containing recordings directly inside its `RECORD` directory. The user timer checks for new recordings approximately once per minute.
+
 ## Install
 
 ```bash
@@ -49,6 +77,16 @@ $EDITOR ~/.local/share/usb-audio-transcriber/config.env
 ```
 
 At minimum, set `VAULT_DIR` to wherever you want Markdown transcripts to be written. The defaults store data beneath `~/usb-audio-transcriber-data`.
+
+### Update an existing installation
+
+```bash
+cd usb-audio-transcriber
+git pull --ff-only
+./install.sh
+```
+
+The installer replaces deployed program files but preserves an existing installed `config.env`.
 
 ## Status and logs
 
@@ -83,6 +121,8 @@ The pipeline also logs to:
 | `fast` | `distil-large-v3` | Fastest supported option; lower disk, RAM, and CPU cost | Can be less reliable on distant, overlapping, or otherwise difficult speech |
 | `accurate` | `large-v3` | Best accuracy-oriented option; more robust on difficult audio | Substantially slower on CPU; about 2.9 GiB of disk cache |
 | `both` | both models | Produces a direct A/B comparison from the same recording | Takes the combined runtime and disk space of both models |
+
+In one real CPU benchmark of a 57m 45s recording, `distil-large-v3` finished in 16m 56s while `large-v3` took 89m 57s: 5.31 times longer. Treat that as one hardware/audio data point, not a universal benchmark. See [Whisper model profiles](docs/model-profiles.md) for the complete result and interpretation.
 
 With `both`, JSON and text artifacts are labelled `.fast` and `.accurate`, and
 Markdown notes include the profile in their filenames. A queued recording is
@@ -129,6 +169,8 @@ python3 -m py_compile bin/*.py
 bash -n install.sh uninstall.sh bin/run-cycle.sh
 python3 -m unittest discover -s tests -v
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change. Report security issues privately according to [SECURITY.md](SECURITY.md).
 
 ## License
 
