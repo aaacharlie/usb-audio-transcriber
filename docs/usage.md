@@ -32,22 +32,32 @@ For a single model profile, an archived `meeting.wav` receives:
 
 ```text
 meeting.wav
-meeting.json
-meeting.txt
+meeting.wav.json
+meeting.wav.txt
+meeting.wav.complete.json
 ```
 
-The Markdown note is written separately under `VAULT_DIR` and includes YAML metadata, an optional summary, and timestamped transcript segments.
+The Markdown note is written separately under `VAULT_DIR` and includes YAML metadata, an optional summary, and timestamped transcript segments. The
+`.complete.json` completion marker is written last, after the sidecars and the
+note; a pass counts as finished—and its queue entry is removed—only once the
+marker exists. Recordings with no detected speech still produce all four
+outputs, with `"status": "no_speech"`. Delete a recording's `.complete.json`
+(and any stale sidecars) to force a fresh transcription pass.
 
 For `WHISPER_MODEL_PROFILE=both`, artifacts are model-labelled:
 
 ```text
-meeting.fast.json
-meeting.fast.txt
-meeting.accurate.json
-meeting.accurate.txt
+meeting.wav.fast.json
+meeting.wav.fast.txt
+meeting.wav.fast.complete.json
+meeting.wav.accurate.json
+meeting.wav.accurate.txt
+meeting.wav.accurate.complete.json
 ```
 
-The transcript notes also include `fast` or `accurate` in their filenames.
+Keeping the source extension in every artifact prevents a `.wav` and `.mp3` with
+the same stem from overwriting each other. Transcript notes also include `fast`
+or `accurate` in their filenames.
 
 ## Manage model caches
 

@@ -1,9 +1,13 @@
 import importlib.util
+import json
+import os
 import sqlite3
+import stat
 import sys
 import tempfile
 import types
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -119,8 +123,21 @@ class ModelProfileTests(unittest.TestCase):
         profile = profiles_for("accurate")[0]
         self.assertEqual(
             model_profiles.artifact_path(audio, profile, ".txt", comparison=True),
-            Path("meeting.accurate.txt"),
+            Path("meeting.wav.accurate.txt"),
         )
+
+    def test_artifact_names_preserve_source_extensions(self):
+        profile = profiles_for("fast")[0]
+        wav = model_profiles.artifact_path(
+            Path("meeting.wav"), profile, ".txt"
+        )
+        mp3 = model_profiles.artifact_path(
+            Path("meeting.mp3"), profile, ".txt"
+        )
+
+        self.assertEqual(wav, Path("meeting.wav.txt"))
+        self.assertEqual(mp3, Path("meeting.mp3.txt"))
+        self.assertNotEqual(wav, mp3)
 
     def test_comparison_completion_requires_json_and_text_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -135,6 +152,12 @@ class ModelProfileTests(unittest.TestCase):
             )
             model_profiles.artifact_path(
                 audio, profile, ".txt", comparison=True
+            ).touch()
+            self.assertFalse(
+                model_profiles.artifacts_complete(audio, profile, comparison=True)
+            )
+            model_profiles.artifact_path(
+                audio, profile, ".complete.json", comparison=True
             ).touch()
             self.assertTrue(
                 model_profiles.artifacts_complete(audio, profile, comparison=True)
@@ -161,6 +184,52 @@ class ModelProfileTests(unittest.TestCase):
 
 
 class TranscriberProfileTests(unittest.TestCase):
+    def test_private_write_keeps_previous_file_after_interruption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module = load_transcriber({
+                "QUEUE_DIR": str(root / "queue"),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(root / "state.sqlite"),
+            })
+            target = root / "transcript.txt"
+            target.write_text("complete", encoding="utf-8")
+            original_write_text = Path.write_text
+
+            def interrupted_write(path, text, *args, **kwargs):
+                original_write_text(path, "partial", encoding="utf-8")
+                raise OSError("interrupted")
+
+            with mock.patch.object(Path, "write_text", new=interrupted_write):
+                with self.assertRaisesRegex(OSError, "interrupted"):
+                    module.write_private_text(target, "replacement")
+
+            self.assertEqual(target.read_text(encoding="utf-8"), "complete")
+            self.assertEqual(list(root.glob("*.tmp")), [])
+
+    def test_private_write_flushes_data_before_and_directory_after_replace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module = load_transcriber({
+                "QUEUE_DIR": str(root / "queue"),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(root / "state.sqlite"),
+            })
+            target = root / "transcript.txt"
+            events = []
+            real_fsync = os.fsync
+
+            def recording_fsync(descriptor):
+                kind = "dir" if stat.S_ISDIR(os.fstat(descriptor).st_mode) else "file"
+                events.append((kind, target.exists()))
+                return real_fsync(descriptor)
+
+            with mock.patch.object(module.os, "fsync", recording_fsync):
+                module.write_private_text(target, "durable")
+
+            self.assertEqual(target.read_text(encoding="utf-8"), "durable")
+            self.assertEqual(events, [("file", False), ("dir", True)])
+
     def test_transcriber_loads_both_configured_profiles(self):
         module = load_transcriber({
             "QUEUE_DIR": "/queue",
@@ -203,13 +272,14 @@ class TranscriberProfileTests(unittest.TestCase):
             audio = queue / "meeting.wav"
             audio.touch()
             state_db = root / "state.sqlite"
-            with sqlite3.connect(state_db) as connection:
+            with closing(sqlite3.connect(state_db)) as connection:
                 connection.execute(
                     "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
                 )
                 connection.execute(
                     "INSERT INTO seen VALUES (?, 0)", (str(audio),)
                 )
+                connection.commit()
             module = load_transcriber({
                 "QUEUE_DIR": str(queue),
                 "VAULT_DIR": str(root / "vault"),
@@ -242,10 +312,16 @@ class TranscriberProfileTests(unittest.TestCase):
                 self.assertEqual(module.main(), 0)
 
             self.assertEqual(loaded, ["distil-large-v3", "large-v3"])
-            self.assertTrue((queue / "meeting.fast.txt").exists())
-            self.assertTrue((queue / "meeting.accurate.txt").exists())
+            self.assertTrue((queue / "meeting.wav.fast.txt").exists())
+            self.assertTrue((queue / "meeting.wav.accurate.txt").exists())
+            self.assertEqual(
+                os.stat(queue / "meeting.wav.fast.txt").st_mode & 0o777,
+                0o600,
+            )
+            note = next((root / "vault").glob("*.md"))
+            self.assertEqual(os.stat(note).st_mode & 0o777, 0o600)
             self.assertFalse(audio.exists())
-            with sqlite3.connect(state_db) as connection:
+            with closing(sqlite3.connect(state_db)) as connection:
                 transcribed = connection.execute(
                     "SELECT transcribed FROM seen"
                 ).fetchone()[0]
@@ -256,6 +332,214 @@ class TranscriberProfileTests(unittest.TestCase):
             )
             self.assertEqual(accurate_start["files_completed"], 1)
             self.assertEqual(accurate_start["current_percent"], 0)
+
+    def test_dangling_queue_symlink_does_not_block_other_recordings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / "queue"
+            queue.mkdir()
+            audio = queue / "meeting.wav"
+            audio.touch()
+            dangling = queue / "deleted.wav"
+            dangling.symlink_to(root / "archive" / "deleted.wav")
+            state_db = root / "state.sqlite"
+            with closing(sqlite3.connect(state_db)) as connection:
+                connection.execute(
+                    "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)", (str(audio),)
+                )
+                connection.commit()
+            module = load_transcriber({
+                "QUEUE_DIR": str(queue),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(state_db),
+                "AUDIO_EXTS": "wav",
+                "WHISPER_MODEL_PROFILE": "fast",
+            })
+
+            class FakeSegment:
+                start = 0
+                end = 1
+                text = " Hello."
+
+            class FakeModel:
+                def __init__(self, model_id, **kwargs):
+                    pass
+
+                def transcribe(self, path, **kwargs):
+                    return iter([FakeSegment()]), types.SimpleNamespace(duration=1)
+
+            fake_module = types.SimpleNamespace(WhisperModel=FakeModel)
+            with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+                    mock.patch.object(module, "write_progress"):
+                self.assertEqual(module.main(), 0)
+
+            self.assertTrue((queue / "meeting.wav.txt").exists())
+            self.assertFalse(dangling.is_symlink())
+
+    def test_state_database_is_closed_when_transcription_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / "queue"
+            queue.mkdir()
+            audio = queue / "meeting.wav"
+            audio.touch()
+            state_db = root / "state.sqlite"
+            with closing(sqlite3.connect(state_db)) as connection:
+                connection.execute(
+                    "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)", (str(audio),)
+                )
+                connection.commit()
+            module = load_transcriber({
+                "QUEUE_DIR": str(queue),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(state_db),
+                "AUDIO_EXTS": "wav",
+                "WHISPER_MODEL_PROFILE": "fast",
+            })
+
+            class FailingModel:
+                def __init__(self, model_id, **kwargs):
+                    pass
+
+                def transcribe(self, path, **kwargs):
+                    raise RuntimeError("model crashed")
+
+            connections = []
+            real_connect = sqlite3.connect
+
+            def tracking_connect(*args, **kwargs):
+                connection = real_connect(*args, **kwargs)
+                connections.append(connection)
+                return connection
+
+            fake_module = types.SimpleNamespace(WhisperModel=FailingModel)
+            with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+                    mock.patch.object(module, "write_progress"), \
+                    mock.patch.object(module.sqlite3, "connect", tracking_connect):
+                with self.assertRaisesRegex(RuntimeError, "model crashed"):
+                    module.main()
+
+            self.assertEqual(len(connections), 1)
+            for connection in connections:
+                with self.assertRaises(sqlite3.ProgrammingError):
+                    connection.execute("SELECT 1")
+            self.assertTrue(audio.exists())
+
+    def test_interrupted_completion_marker_keeps_recording_queued(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / "queue"
+            queue.mkdir()
+            audio = queue / "meeting.wav"
+            audio.touch()
+            state_db = root / "state.sqlite"
+            with closing(sqlite3.connect(state_db)) as connection:
+                connection.execute(
+                    "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)", (str(audio),)
+                )
+                connection.commit()
+            module = load_transcriber({
+                "QUEUE_DIR": str(queue),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(state_db),
+                "AUDIO_EXTS": "wav",
+                "WHISPER_MODEL_PROFILE": "fast",
+            })
+
+            class FakeSegment:
+                start = 0
+                end = 1
+                text = " Hello."
+
+            class FakeModel:
+                def __init__(self, model_id, **kwargs):
+                    pass
+
+                def transcribe(self, path, **kwargs):
+                    return iter([FakeSegment()]), types.SimpleNamespace(duration=1)
+
+            real_write = module.write_private_text
+
+            def failing_marker_write(path, text):
+                if path.name.endswith(".complete.json"):
+                    raise OSError("interrupted before completion marker")
+                return real_write(path, text)
+
+            fake_module = types.SimpleNamespace(WhisperModel=FakeModel)
+            with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+                    mock.patch.object(module, "write_progress"), \
+                    mock.patch.object(
+                        module, "write_private_text", failing_marker_write
+                    ):
+                with self.assertRaisesRegex(OSError, "completion marker"):
+                    module.main()
+
+            profile = profiles_for("fast")[0]
+            self.assertTrue(audio.is_symlink() or audio.exists())
+            self.assertFalse(
+                module.artifacts_complete(audio, profile, comparison=False)
+            )
+            with closing(sqlite3.connect(state_db)) as connection:
+                transcribed = connection.execute(
+                    "SELECT transcribed FROM seen"
+                ).fetchone()[0]
+            self.assertEqual(transcribed, 0)
+
+    def test_no_speech_writes_auditable_output_before_dequeuing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / "queue"
+            queue.mkdir()
+            audio = queue / "silence.wav"
+            audio.touch()
+            state_db = root / "state.sqlite"
+            with closing(sqlite3.connect(state_db)) as connection:
+                connection.execute(
+                    "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)", (str(audio),)
+                )
+                connection.commit()
+            module = load_transcriber({
+                "QUEUE_DIR": str(queue),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(state_db),
+                "AUDIO_EXTS": "wav",
+                "WHISPER_MODEL_PROFILE": "fast",
+            })
+
+            class SilentModel:
+                def __init__(self, model_id, **kwargs):
+                    pass
+
+                def transcribe(self, path, **kwargs):
+                    return iter([]), types.SimpleNamespace(duration=30)
+
+            fake_module = types.SimpleNamespace(WhisperModel=SilentModel)
+            with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+                    mock.patch.object(module, "write_progress"):
+                self.assertEqual(module.main(), 0)
+
+            result = json.loads(
+                (queue / "silence.wav.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(result["status"], "no_speech")
+            self.assertEqual(
+                (queue / "silence.wav.txt").read_text(encoding="utf-8"), ""
+            )
+            note = next((root / "vault").glob("*.md"))
+            self.assertIn("No speech was detected", note.read_text(encoding="utf-8"))
+            self.assertFalse(audio.exists())
 
 
 if __name__ == "__main__":

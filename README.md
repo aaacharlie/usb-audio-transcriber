@@ -25,7 +25,7 @@ The safe default is `distil-large-v3` on CPU. Source recordings stay on the USB 
 2. It finds supported audio files inside a configurable recorder directory (default: `RECORD`).
 3. It copies new recordings to a local archive and verifies the copy with SHA-256.
 4. It deduplicates future scans using SQLite, then transcribes queued recordings locally with faster-whisper.
-5. It writes `.json` segments, `.txt` text, and a Markdown transcript note.
+5. It writes `.json` segments, `.txt` text, a Markdown transcript note, and a `.complete.json` marker that confirms all outputs finished.
 6. During transcription, it shows a Linux desktop progress dialog with the active file, number of files, percentage, and ETA.
 
 ## Privacy and safety
@@ -38,7 +38,7 @@ The safe default is `distil-large-v3` on CPU. Source recordings stay on the USB 
 ## Requirements
 
 - Linux desktop with a running user systemd session
-- Python 3.8+
+- Python 3.10+
 - `ffmpeg` for audio decoding
 - `zenity` for the progress window
 - Internet access the first time faster-whisper downloads the configured model
@@ -102,6 +102,16 @@ The pipeline also logs to:
 ~/.local/share/usb-audio-transcriber/var/logs/pipeline.log
 ```
 
+Run the built-in diagnostic after installation or whenever setup fails:
+
+```bash
+~/.local/share/usb-audio-transcriber/venv/bin/python \
+  ~/.local/share/usb-audio-transcriber/bin/doctor.py
+```
+
+It checks configuration, required commands and Python packages, writable output
+locations, and the user timer without creating recordings or transcript data.
+
 ## Configuration
 
 `config.example.env` documents all options. Common settings:
@@ -160,7 +170,10 @@ SQLite state, or transcript vault.
 ./uninstall.sh
 ```
 
-This removes the program and timer but deliberately preserves your configured archive and transcripts.
+This removes deployed code, the virtual environment, and user systemd units. It
+deliberately preserves `config.env`, runtime state, configured archives and
+transcripts, and Hugging Face model caches so uninstalling cannot silently erase
+user data.
 
 ## Development checks
 

@@ -3,10 +3,16 @@
 ## First checks
 
 ```bash
+~/.local/share/usb-audio-transcriber/venv/bin/python \
+  ~/.local/share/usb-audio-transcriber/bin/doctor.py
 systemctl --user status usb-audio-transcriber.timer
 systemctl --user status usb-audio-transcriber.service
 journalctl --user-unit=usb-audio-transcriber.service -n 100 --no-pager
 ```
+
+The doctor exits nonzero for blocking configuration, dependency, or path
+problems. Inactive or disabled timer states are warnings so the command remains
+useful while the service is intentionally paused.
 
 The application log is:
 
@@ -86,4 +92,10 @@ Do not delete the queue, archive, or state database as a first response. Preserv
 
 ## Reinstall without losing configuration
 
-Running `./install.sh` updates deployed program files and preserves an existing installed `config.env`. The uninstaller removes the installed application directory, including that configuration, but deliberately does not remove archive/transcript paths configured outside it. Back up `config.env` before uninstalling.
+Running `./install.sh` updates deployed program files and preserves an existing
+installed `config.env`. Dependencies are installed into the virtual environment
+before deployed files are replaced, so a failed download cannot damage a
+working installation. The uninstaller removes deployed code, the virtual
+environment, and user units while preserving configuration, runtime state,
+archives, transcripts, and model caches. Reinstalling later reuses the preserved
+configuration.

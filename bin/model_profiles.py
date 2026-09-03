@@ -64,18 +64,18 @@ def profiles_for_config(config):
 
 
 def artifact_path(audio, profile, suffix, comparison=False):
-    """Name A/B artifacts by profile without changing legacy single-model paths."""
+    """Name artifacts without losing the source extension or profile."""
     audio = Path(audio)
     if comparison:
-        return audio.with_name(f"{audio.stem}.{profile.key}{suffix}")
-    return audio.with_suffix(suffix)
+        return audio.with_name(f"{audio.name}.{profile.key}{suffix}")
+    return audio.with_name(f"{audio.name}{suffix}")
 
 
 def artifacts_complete(audio, profile, comparison=False):
-    """Return whether both durable transcript artifacts exist for a pass."""
+    """Return whether sidecars and the final completion marker exist."""
     return all(
         artifact_path(audio, profile, suffix, comparison).is_file()
-        for suffix in (".json", ".txt")
+        for suffix in (".json", ".txt", ".complete.json")
     )
 
 
