@@ -10,6 +10,7 @@ The safe default is `distil-large-v3` on CPU. Source recordings stay on the USB 
 
 ## Documentation
 
+- [Documentation wiki](docs/README.md)
 - [Usage guide](docs/usage.md)
 - [Configuration reference](docs/configuration.md)
 - [Whisper model profiles and measured trade-offs](docs/model-profiles.md)
@@ -17,7 +18,6 @@ The safe default is `distil-large-v3` on CPU. Source recordings stay on the USB 
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy and security](docs/privacy-and-security.md)
 - [Development guide](docs/development.md)
-- [GitHub wiki](https://github.com/aaacharlie/usb-audio-transcriber/wiki)
 
 ## What it does
 
