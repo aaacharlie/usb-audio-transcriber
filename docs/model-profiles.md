@@ -12,7 +12,7 @@ Use `fast` for routine English recordings. Use `accurate` only when difficult sp
 
 ## Measured example
 
-A real 57 minute 45 second recording on the original CPU-based deployment produced:
+A real 57 minute 45 second recording on the original CPU-based deployment — a GEEKOM X16 laptop (NX16AM) with an Intel Core Ultra 9 185H (16 cores / 22 threads), 32 GB RAM, and integrated graphics, running Ubuntu 26.04 LTS with GNOME — produced:
 
 | Model | Elapsed time | Throughput |
 | --- | ---: | ---: |

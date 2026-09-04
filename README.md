@@ -191,7 +191,7 @@ locations, and the user timer without creating recordings or transcript data.
 | `accurate` | `large-v3` | Best accuracy-oriented option; more robust on difficult audio | Substantially slower on CPU; about 2.9 GiB of disk cache |
 | `both` | both models | Produces a direct A/B comparison from the same recording | Takes the combined runtime and disk space of both models |
 
-In one real CPU benchmark of a 57m 45s recording, `distil-large-v3` finished in 16m 56s while `large-v3` took 89m 57s: 5.31 times longer. Treat that as one hardware/audio data point, not a universal benchmark. See [Whisper model profiles](docs/model-profiles.md) for the complete result and interpretation.
+In one real CPU benchmark of a 57m 45s recording, `distil-large-v3` finished in 16m 56s while `large-v3` took 89m 57s: 5.31 times longer. That run was CPU-only on a GEEKOM X16 laptop (NX16AM): an Intel Core Ultra 9 185H (16 cores / 22 threads), 32 GB RAM, integrated graphics, running Ubuntu 26.04 LTS with GNOME — a consumer laptop, not a GPU workstation. Treat it as one hardware/audio data point, not a universal benchmark. See [Whisper model profiles](docs/model-profiles.md) for the complete result and interpretation.
 
 With `both`, JSON and text artifacts are labelled `.fast` and `.accurate`, and
 Markdown notes include the profile in their filenames. A queued recording is
