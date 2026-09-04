@@ -101,6 +101,27 @@ def archive_path_for(src):
     return destination
 
 
+def archive_from_source(src, digest):
+    """Copy a recording into the archive, checksum it, and make it durable.
+
+    Returns the archived path, or None when the copy failed verification.
+    """
+    destination = archive_path_for(src)
+    log(f"  copy {src.name} -> {destination.name}")
+    shutil.copy2(src, destination)
+    destination.chmod(0o600)
+    if sha256(destination) != digest:
+        log("  !! checksum mismatch, discarding copy")
+        destination.unlink(missing_ok=True)
+        return None
+    try:
+        sync_file_and_parent(destination)
+    except OSError:
+        destination.unlink(missing_ok=True)
+        raise
+    return destination
+
+
 def ensure_queued(archived):
     """Create or validate the queue symlink for an archived recording."""
     link = QUEUE / archived.name
@@ -159,6 +180,27 @@ def main():
                         queue_ready = ensure_queued(archived)
                         if queue_ready:
                             log("       pending archive is queued")
+                    elif not queue_ready:
+                        # Lost/corrupt archive but the source is still on
+                        # the device: restore it. Purge waits for a later
+                        # run's re-verification, so `verified` stays False.
+                        restored = archive_from_source(src, digest)
+                        if restored is not None:
+                            con.execute(
+                                "UPDATE seen SET archived_to=?, bytes=?, "
+                                "imported_at=? WHERE sha256=?",
+                                (str(restored), restored.stat().st_size,
+                                 datetime.now().isoformat(timespec="seconds"),
+                                 digest),
+                            )
+                            con.commit()
+                            queue_ready = ensure_queued(restored)
+                            if queue_ready:
+                                log("       re-archived lost duplicate "
+                                    "from source")
+                            else:
+                                log(f"  !! queue name conflict for "
+                                    f"{restored.name}: not queued")
                 if PURGE:
                     if verified and queue_ready:
                         src.unlink(missing_ok=True)
@@ -167,19 +209,9 @@ def main():
                         log("       NOT purged: archive or pending queue is unverified")
                 continue
 
-            destination = archive_path_for(src)
-            log(f"  copy {src.name} -> {destination.name}")
-            shutil.copy2(src, destination)
-            destination.chmod(0o600)
-            if sha256(destination) != digest:
-                log("  !! checksum mismatch, discarding copy")
-                destination.unlink(missing_ok=True)
+            destination = archive_from_source(src, digest)
+            if destination is None:
                 continue
-            try:
-                sync_file_and_parent(destination)
-            except OSError:
-                destination.unlink(missing_ok=True)
-                raise
             con.execute(
                 "INSERT INTO seen (sha256, orig_name, archived_to, bytes, imported_at) "
                 "VALUES (?,?,?,?,?)",

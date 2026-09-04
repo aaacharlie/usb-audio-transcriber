@@ -158,6 +158,56 @@ class DuplicatePurgeTests(unittest.TestCase):
             self.assertEqual(len(list((root / "queue").iterdir())), 1)
 
 
+class DuplicateRepairTests(unittest.TestCase):
+    def test_untranscribed_duplicate_with_lost_archive_is_rearchived_and_requeued(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "media" / "RECORD" / "meeting.wav"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"recording" * 1024)
+            config = {
+                "ARCHIVE_DIR": str(root / "archive"),
+                "QUEUE_DIR": str(root / "queue"),
+                "STATE_DB": str(root / "state" / "seen.sqlite"),
+                "AUDIO_EXTS": "wav",
+                "RECORDER_DIR": "RECORD",
+                "PURGE_DEVICE": "0",
+            }
+            ingest = load_ingest(config)
+            digest = ingest.sha256(source)
+            with closing(ingest.init_db()) as connection:
+                connection.execute(
+                    "INSERT INTO seen "
+                    "(sha256, orig_name, archived_to, bytes, imported_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (digest, source.name, str(root / "archive" / "missing.wav"),
+                     source.stat().st_size, "2026-09-02T00:00:00"),
+                )
+                connection.commit()
+            with mock.patch.object(ingest, "find_candidates", return_value=[source]), \
+                    mock.patch.object(ingest, "stable", return_value=True):
+                self.assertEqual(ingest.main(), 0)
+
+            self.assertTrue(source.exists())
+            rearchived = list((root / "archive").rglob("*.wav"))
+            self.assertEqual(len(rearchived), 1)
+            self.assertEqual(ingest.sha256(rearchived[0]), digest)
+            self.assertEqual(os.stat(rearchived[0]).st_mode & 0o777, 0o600)
+            queued = list((root / "queue").iterdir())
+            self.assertEqual(len(queued), 1)
+            self.assertTrue(queued[0].is_symlink())
+            self.assertEqual(queued[0].resolve(), rearchived[0].resolve())
+            with closing(ingest.init_db()) as connection:
+                row = connection.execute(
+                    "SELECT archived_to, bytes, imported_at, transcribed "
+                    "FROM seen WHERE sha256=?", (digest,)
+                ).fetchone()
+            self.assertEqual(row[0], str(rearchived[0]))
+            self.assertEqual(row[1], rearchived[0].stat().st_size)
+            self.assertNotEqual(row[2], "2026-09-02T00:00:00")
+            self.assertEqual(row[3], 0)
+
+
 class SensitiveFileModeTests(unittest.TestCase):
     def test_import_restricts_archive_and_database_permissions(self):
         with tempfile.TemporaryDirectory() as directory:
