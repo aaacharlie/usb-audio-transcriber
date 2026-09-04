@@ -9,7 +9,21 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from model_profiles import profiles_for
+from model_profiles import artifact_path, profiles_for
+
+
+def default_output_dir(audio):
+    """Keep the full source name so meeting.wav and meeting.mp3 cannot collide."""
+    return audio.parent / f"{audio.name}-whisper-ab"
+
+
+def profile_artifacts(output_dir, audio, profile):
+    """Name sidecars the way the pipeline does: <source-name>.<profile>.<ext>."""
+    base = output_dir / audio.name
+    return tuple(
+        artifact_path(base, profile, suffix, comparison=True)
+        for suffix in (".json", ".txt")
+    )
 
 
 def main():
@@ -26,7 +40,7 @@ def main():
     audio = args.audio.expanduser().resolve()
     if not audio.is_file():
         parser.error(f"audio file does not exist: {audio}")
-    output_dir = (args.output_dir or audio.parent / f"{audio.stem}-whisper-ab").expanduser()
+    output_dir = (args.output_dir or default_output_dir(audio)).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     from faster_whisper import WhisperModel
@@ -49,8 +63,8 @@ def main():
         ]
         elapsed = time.time() - started
         x_realtime = info.duration / elapsed if elapsed else None
-        stem = output_dir / f"{audio.stem}.{profile.key}"
-        stem.with_suffix(stem.suffix + ".json").write_text(json.dumps({
+        json_path, txt_path = profile_artifacts(output_dir, audio, profile)
+        json_path.write_text(json.dumps({
             "audio": str(audio),
             "profile": profile.key,
             "model": profile.model_id,
@@ -59,7 +73,7 @@ def main():
             "x_realtime": x_realtime,
             "segments": segments,
         }, indent=2), encoding="utf-8")
-        stem.with_suffix(stem.suffix + ".txt").write_text(
+        txt_path.write_text(
             " ".join(segment["text"].strip() for segment in segments),
             encoding="utf-8",
         )

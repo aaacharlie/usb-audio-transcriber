@@ -83,7 +83,7 @@ APP=~/.local/share/usb-audio-transcriber
 $PYTHON $APP/bin/benchmark-models.py /path/to/recording.wav --profile both
 ```
 
-By default, results go to `<recording-name>-whisper-ab/` beside the source. Use `--output-dir` to select another location. The benchmark does not modify the source, archive, queue, SQLite state, or transcript vault.
+By default, results go to `<recording-file-name>-whisper-ab/` beside the source — for example `meeting.wav-whisper-ab/` — keeping the extension so benchmarks of `meeting.wav` and `meeting.mp3` never overwrite each other. Use `--output-dir` to select another location. The benchmark does not modify the source, archive, queue, SQLite state, or transcript vault.
 
 ## Pause and resume scanning
 
