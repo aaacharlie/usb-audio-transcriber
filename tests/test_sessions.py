@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -49,6 +49,7 @@ class Fixture:
             "STATE_DB": str(self.state),
             "AUDIO_EXTS": "wav",
             "WHISPER_MODEL_PROFILE": "fast",
+            "SESSION_BACKFILL_DAYS": "",  # tests use fixed dates; guard tested separately
             **extra,
         }
         with closing(sqlite3.connect(self.state)) as con:
@@ -336,6 +337,59 @@ class SummaryTests(unittest.TestCase):
 
             llm.assert_not_called()
             self.assertIn("turned off", written[0].read_text(encoding="utf-8"))
+
+
+class BackfillTests(unittest.TestCase):
+    def test_old_sessions_get_notes_without_an_automatic_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key",
+                              SESSION_BACKFILL_DAYS="7")
+            fixture.recording(datetime(2026, 8, 1, 9, 30), 30)
+            sessions = load_sessions(fixture.config)
+            with mock.patch.object(sessions, "call_llm") as llm:
+                written = fixture.run(sessions)
+
+            llm.assert_not_called()
+            body = written[0].read_text(encoding="utf-8")
+            self.assertIn("AI summary skipped", body)
+            self.assertIn("## Combined transcript", body)
+            self.assertEqual([row[3] for row in fixture.rows()], [0])
+
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nLate.") as llm:
+                retried = fixture.run(sessions, "retry")
+
+            llm.assert_called_once()
+            self.assertIn("Late.", retried[0].read_text(encoding="utf-8"))
+            self.assertEqual([row[3] for row in fixture.rows()], [1])
+
+    def test_recent_sessions_are_still_summarized_automatically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key",
+                              SESSION_BACKFILL_DAYS="7")
+            recent = (datetime.now() - timedelta(days=1)).replace(
+                hour=9, minute=30, second=0, microsecond=0)
+            fixture.recording(recent, 30)
+            sessions = load_sessions(fixture.config)
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nFresh.") as llm:
+                written = fixture.run(sessions)
+
+            llm.assert_called_once()
+            self.assertIn("Fresh.", written[0].read_text(encoding="utf-8"))
+
+    def test_many_notes_in_one_cycle_send_a_single_notification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            for hour in (8, 10, 12, 14, 16):
+                fixture.recording(at(hour, 30), 30)
+            sessions = load_sessions(fixture.config)
+
+            written = fixture.run(sessions)
+
+            self.assertEqual(len(written), 5)
+            self.assertEqual(len(fixture.notifications), 1)
+            self.assertEqual(fixture.notifications[0].args[0], "Session notes written")
+            self.assertIn("5 session notes", fixture.notifications[0].args[1])
+            self.assertEqual(fixture.notifications[0].kwargs["open_path"], fixture.vault)
 
 
 class CliTests(unittest.TestCase):

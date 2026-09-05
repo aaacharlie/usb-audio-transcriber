@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `SESSION_BACKFILL_DAYS` (default 7): on an installation with history, sessions that ended more than that many days ago get notes without an automatic AI summary, and a cycle that writes more than three session notes sends one notification instead of one per note. `sessions.py retry` summarizes older sessions on demand.
 - Full-text search across all transcripts (`bin/search.py`): an FTS5 index in the state database, refreshed every cycle, with `--since`, `--speaker`, prefix, `--raw`, and `--json` options. (#11)
 - `WHISPER_TASK="translate"` translates speech in other languages straight into English instead of transcribing it; the task is validated by the doctor and recorded in each note's front matter (#13, contributed by @anni-x1).
 

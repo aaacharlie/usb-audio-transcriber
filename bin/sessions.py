@@ -27,6 +27,10 @@ PROFILES = profiles_for_config(CFG)
 COMPARISON = len(PROFILES) > 1
 ENABLED = CFG.get("SESSION_NOTES", "1").strip() == "1"
 GAP = timedelta(minutes=int(CFG.get("SESSION_GAP_MIN", "20") or 20))
+# On an installation with history, sessions that ended more than this many
+# days ago get a note but no automatic AI summary (empty = summarize all).
+BACKFILL_DAYS = CFG.get("SESSION_BACKFILL_DAYS", "7").strip()
+BACKFILL = timedelta(days=int(BACKFILL_DAYS)) if BACKFILL_DAYS else None
 OR_KEY = CFG.get("OPENROUTER_API_KEY", "").strip()
 SUMMARY_MODEL = (CFG.get("SESSION_SUMMARY_MODEL", "").strip()
                  or CFG.get("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5"))
@@ -245,6 +249,10 @@ def render_note(members, summary_md, summary_status, ident):
                   "`sessions.py retry` to try again once the problem is fixed.", ""]
     elif summary_status == "disabled":
         lines += ["> AI summaries are turned off (SESSION_SUMMARY=0).", ""]
+    elif summary_status == "backfill":
+        lines += [f"> AI summary skipped: this session ended more than {BACKFILL_DAYS} "
+                  "days before it was written (SESSION_BACKFILL_DAYS). Run "
+                  "`sessions.py retry` to summarize older sessions on demand.", ""]
     else:
         lines += [NO_KEY_HINT, ""]
     lines += ["## Recordings", ""]
@@ -266,12 +274,16 @@ def render_note(members, summary_md, summary_status, ident):
     return "\n".join(lines)
 
 
-def build_summary(members):
-    """Return (markdown, status) where status is ok, failed, disabled, or no_key."""
+def build_summary(members, force=False):
+    """Return (markdown, status): ok, failed, disabled, no_key, or backfill."""
     if not OR_KEY:
         return None, "no_key"
     if not SUMMARIZE:
         return None, "disabled"
+    if not force and BACKFILL is not None:
+        ended = max(member["end"] for member in members)
+        if ended < datetime.now() - BACKFILL:
+            return None, "backfill"
     try:
         return summarize_session(llm_input(members)), "ok"
     except Exception as exc:  # network, quota, or model errors must not lose the note
@@ -279,11 +291,11 @@ def build_summary(members):
         return str(exc), "failed"
 
 
-def write_session(con, members, note=None):
+def write_session(con, members, note=None, force=False):
     ident = session_id(members)
     start = min(member["start"] for member in members)
     end = max(member["end"] for member in members)
-    summary_md, status = build_summary(members)
+    summary_md, status = build_summary(members, force)
     VAULT.mkdir(parents=True, exist_ok=True)
     note = note or unique_note_path(start)
     write_private_text(note, render_note(members, summary_md, status, ident))
@@ -312,8 +324,13 @@ def auto(con):
                 "being transcribed; waiting")
             continue
         written.append(write_session(con, members))
-    for note in written:
-        notify.send("Session note ready", note.stem, open_path=note, config=CFG)
+    if len(written) > 3:
+        # A first run over history can write dozens of notes; one notification.
+        notify.send("Session notes written", f"{len(written)} session notes in {VAULT.name}",
+                    open_path=VAULT, config=CFG)
+    else:
+        for note in written:
+            notify.send("Session note ready", note.stem, open_path=note, config=CFG)
     if not written:
         log("No new sessions to write.")
     return written
@@ -334,7 +351,7 @@ def retry(con):
         if len(members) != len(digests) or not all(m["complete"] for m in members):
             log(f"  session {ident}: recordings missing or incomplete, skipping")
             continue
-        written.append(write_session(con, members, note=Path(note)))
+        written.append(write_session(con, members, note=Path(note), force=True))
     if not written:
         log("No session notes were waiting for a summary.")
     return written

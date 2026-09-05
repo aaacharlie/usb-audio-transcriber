@@ -96,6 +96,7 @@ With no API key, transcription and note generation remain local. With a key, tra
 | --- | --- | --- |
 | `SESSION_NOTES` | `1` | Write one note per session after each cycle |
 | `SESSION_GAP_MIN` | `20` | Recordings separated by a longer silence start a new session |
+| `SESSION_BACKFILL_DAYS` | `7` | Sessions that ended more than this many days ago get a note without an automatic AI summary; `sessions.py retry` summarizes them on demand; empty summarizes everything |
 | `SESSION_SUMMARY` | `1` | Add an AI summary to session notes when `OPENROUTER_API_KEY` is set |
 | `SESSION_SUMMARY_MODEL` | empty | OpenRouter model for session summaries; empty means `OPENROUTER_MODEL` |
 | `SESSION_SUBJECT` | empty | Subject matter inserted into the summary prompt |

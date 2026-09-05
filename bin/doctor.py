@@ -81,6 +81,14 @@ def check_config(config):
                 valid = False
             if not valid:
                 failures.append(f"{name} must be a positive integer or empty")
+    backfill = config.get("SESSION_BACKFILL_DAYS", "7").strip()
+    if backfill:
+        try:
+            valid = int(backfill) > 0
+        except ValueError:
+            valid = False
+        if not valid:
+            failures.append("SESSION_BACKFILL_DAYS must be a positive integer or empty")
     prompt_file = config.get("SESSION_PROMPT_FILE", "").strip()
     if prompt_file and not Path(prompt_file).expanduser().is_file():
         failures.append(f"SESSION_PROMPT_FILE is not a readable file: {prompt_file}")
