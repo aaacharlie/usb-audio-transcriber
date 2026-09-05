@@ -69,6 +69,7 @@ meeting.wav.accurate.complete.json
 Keeping the source extension in every artifact prevents a `.wav` and `.mp3` with
 the same stem from overwriting each other. Transcript notes also include `fast`
 or `accurate` in their filenames.
+
 ## Session notes and AI summaries
 
 Voice-activated recorders split one meeting, class, or site visit into many files. After each cycle, `bin/sessions.py` groups transcribed recordings whose gaps are shorter than `SESSION_GAP_MIN` (20 minutes by default) into a session and writes one note per session:

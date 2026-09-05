@@ -113,6 +113,18 @@ class DoctorConfigTests(unittest.TestCase):
 
         self.assertNotIn("WHISPER_TASK must be transcribe or translate", failures)
 
+    def test_check_config_treats_empty_whisper_task_as_the_default(self):
+        failures = doctor.check_config({
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            "WHISPER_TASK": "",
+        })
+
+        self.assertEqual(failures, [])
+
 
 class DoctorWatchDirTests(unittest.TestCase):
     def base_config(self, **extra):
