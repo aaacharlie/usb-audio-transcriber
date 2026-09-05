@@ -2,7 +2,7 @@
 
 ## Normal workflow
 
-1. Install the project with the one-line installer from the README (or `git clone` and `./install.sh`). On a fresh install the setup wizard asks where notes should go and offers your Obsidian vaults; run `bin/setup.py` again any time to change it. Re-running the same one-liner later updates the installation.
+1. Install the project with the one-line installer from the README (or `git clone` and `./install.sh`). On a fresh install the setup wizard asks where notes should go, offers your Obsidian vaults, and asks how summaries should be made; change any of it later in the [control panel](panel.md) (the "USB Audio Transcriber" entry in your app menu) or by running `bin/setup.py` again. Re-running the same one-liner later updates the installation.
 2. Keep `usb-audio-transcriber.timer` enabled.
 3. Mount or plug in removable media containing audio directly inside the configured recorder directory, `RECORD` by default.
 4. A cycle starts a few seconds after the drive mounts (the plug-in trigger watches the mount folders). The timer is the fallback and scans about once a minute, which also covers folders in `WATCH_DIRS`.
@@ -78,9 +78,9 @@ Voice-activated recorders split one meeting, class, or site visit into many file
 2026-09-05 0900 session.md
 ```
 
-The note has YAML front matter (`type: session`, recording count, duration, speech minutes), a `## Summary` section, a `## Recordings` list that links every transcript note with `[[wikilinks]]`, and a `## Combined transcript` that stitches all the recordings together in order. Without an API key the summary section holds a short hint and the combined transcript is the thing to paste into an AI model together with `prompts/session-summary.md`.
+The note has YAML front matter (`type: session`, recording count, duration, speech minutes), a `## Summary` section, a `## Recordings` list that links every transcript note with `[[wikilinks]]`, and a `## Combined transcript` that stitches all the recordings together in order. Without a summary backend the summary section holds a short hint and the combined transcript is the thing to paste into an AI model together with `prompts/session-summary.md`.
 
-With `OPENROUTER_API_KEY` set, the pipeline sends the ordered transcripts to the model named by `SESSION_SUMMARY_MODEL` (falling back to `OPENROUTER_MODEL`) using the bundled prompt, and writes the result into the summary section. Set `SESSION_SUBJECT` to the topic of your recordings so the model can fix misheard jargon and names, and pick a strong model for sessions even if the per-file `OPENROUTER_MODEL` stays small. Sessions longer than `MAP_WINDOW_CHARS` are summarized in windows and then merged. Set `FILE_SUMMARY=0` to keep only session summaries.
+With a summary backend configured (`SUMMARY_BACKEND`: a command-line AI tool you already pay for such as Codex or Claude Code, a local Ollama model, or OpenRouter; the setup wizard asks, and the [configuration reference](configuration.md#ai-summaries) has the recipes), the pipeline sends the ordered transcripts through it using the bundled prompt and writes the result into the summary section. `sessions.py test-backend` checks that the backend answers before you rely on it. Set `SESSION_SUBJECT` to the topic of your recordings so the model can fix misheard jargon and names, and pick a strong model for sessions even if the per-file `OPENROUTER_MODEL` stays small. Sessions longer than `MAP_WINDOW_CHARS` are summarized in windows and then merged. Set `FILE_SUMMARY=0` to keep only session summaries.
 
 A session is closed when its note is written. Recordings that arrive later start a new session, even if they would have fitted the gap rule. A session whose recordings are still being transcribed waits for the next cycle.
 
@@ -97,7 +97,7 @@ $PYTHON $APP/bin/sessions.py retry                       # add summaries to note
 $PYTHON $APP/bin/sessions.py rebuild --date 2026-09-05   # forget and regenerate one day
 ```
 
-`retry` is the command to run after adding an API key, or after a summary failed because the network or the provider was down. `rebuild` regroups a day from scratch, which is how to merge a late recording into the session it belongs to.
+`retry` is the command to run after configuring a summary backend, or after a summary failed because the tool, the network, or the provider was down. `rebuild` regroups a day from scratch, which is how to merge a late recording into the session it belongs to.
 
 To change the prompt, copy `prompts/session-summary.md` somewhere, edit it (keep the `{subject}` placeholder), and point `SESSION_PROMPT_FILE` at it.
 

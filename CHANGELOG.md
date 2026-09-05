@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- The control panel (`bin/panel.py`, an app-menu entry, and `usb-audio-transcriber-panel.service`): a token-protected local web app with the pipeline's state, sessions with a Summarize button and backend picker, recordings, search, every setting as a validated form (with "Find my Obsidian vault"), and tools for the doctor, search index, model cache, session rebuilds, and the log. `sessions.py summarize --id` and `--backend` back its actions from the terminal.
+- Summary backends (`SUMMARY_BACKEND`): summaries can now come from a command-line AI tool you already pay for (`command`: Codex, Claude Code, Gemini CLI, your own agent), any OpenAI-compatible server such as a local Ollama (`openai`), or OpenRouter (`openrouter`). The setup wizard asks which, `sessions.py test-backend` checks it, and empty keeps the old OpenRouter-if-key behaviour.
 - `SESSION_BACKFILL_DAYS` (default 7): on an installation with history, sessions that ended more than that many days ago get notes without an automatic AI summary, and a cycle that writes more than three session notes sends one notification instead of one per note. `sessions.py retry` summarizes older sessions on demand.
 - Full-text search across all transcripts (`bin/search.py`): an FTS5 index in the state database, refreshed every cycle, with `--since`, `--speaker`, prefix, `--raw`, and `--json` options. (#11)
 - `WHISPER_TASK="translate"` translates speech in other languages straight into English instead of transcribing it; the task is validated by the doctor and recorded in each note's front matter (#13, contributed by @anni-x1).

@@ -17,7 +17,7 @@ No telemetry is implemented by this project.
 
 ## Optional cloud processing
 
-Cloud processing is enabled only when `OPENROUTER_API_KEY` is populated. In that mode, transcript text is sent to the configured OpenRouter model for summarization: each recording's text for the per-file summary (`FILE_SUMMARY`), and the combined text of a whole session for the session summary (`SESSION_SUMMARY`). This project does not send raw audio to OpenRouter. Session notes themselves (links and the combined transcript) are generated locally.
+Summaries are the only step that can leave the machine, and only when `SUMMARY_BACKEND` is configured. What is sent is transcript text, never audio: each recording's text for the per-file summary (`FILE_SUMMARY`) and the combined text of a whole session for the session summary (`SESSION_SUMMARY`). Where it goes depends on the backend: the `openrouter` backend sends it to OpenRouter; the `openai` backend sends it to whatever server `LLM_BASE_URL` names, which is your own machine when it is Ollama; the `command` backend hands it to the command you configured, so a Codex, Claude Code, or Gemini command sends it to that provider under your subscription. Session notes themselves (links and the combined transcript) are generated locally.
 
 Treat transcripts as potentially sensitive. Before enabling summarization, verify that sending their text to the configured provider is acceptable for the recording's participants and your jurisdiction.
 

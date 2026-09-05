@@ -60,6 +60,7 @@ def check_config(config):
         ("VAD_MIN_SILENCE_MS", "1200"),
         ("MAP_WINDOW_CHARS", "80000"),
         ("SESSION_GAP_MIN", "20"),
+        ("SUMMARY_COMMAND_TIMEOUT", "900"),
     ):
         try:
             valid = int(config.get(name, default).strip()) > 0
@@ -81,6 +82,27 @@ def check_config(config):
                 valid = False
             if not valid:
                 failures.append(f"{name} must be a positive integer or empty")
+    backend = config.get("SUMMARY_BACKEND", "").strip().lower()
+    if backend not in {"", "none", "openrouter", "openai", "command"}:
+        failures.append("SUMMARY_BACKEND must be none, openrouter, openai, or command")
+    if backend == "openrouter" and not config.get("OPENROUTER_API_KEY", "").strip():
+        failures.append("SUMMARY_BACKEND=openrouter needs OPENROUTER_API_KEY")
+    if backend == "openai":
+        if not config.get("LLM_MODEL", "").strip():
+            failures.append("SUMMARY_BACKEND=openai needs LLM_MODEL (for example llama3.1:8b)")
+        base_url = config.get("LLM_BASE_URL", "http://127.0.0.1:11434/v1").strip()
+        if base_url and not base_url.startswith(("http://", "https://")):
+            failures.append("LLM_BASE_URL must start with http:// or https://")
+    if backend == "command" and not config.get("SUMMARY_COMMAND", "").strip():
+        failures.append("SUMMARY_BACKEND=command needs SUMMARY_COMMAND")
+    port = config.get("PANEL_PORT", "").strip()
+    if port:
+        try:
+            valid = 1 <= int(port) <= 65535
+        except ValueError:
+            valid = False
+        if not valid:
+            failures.append("PANEL_PORT must be a number between 1 and 65535")
     backfill = config.get("SESSION_BACKFILL_DAYS", "7").strip()
     if backfill:
         try:
@@ -259,6 +281,7 @@ def main(argv=None):
             for kind, unit in (
                 ("timer", "usb-audio-transcriber.timer"),
                 ("plug-in trigger", "usb-audio-transcriber-plug.path"),
+                ("control panel", "usb-audio-transcriber-panel.service"),
             ):
                 for operation in ("is-enabled", "is-active"):
                     ok, detail = systemd_state(unit, operation)

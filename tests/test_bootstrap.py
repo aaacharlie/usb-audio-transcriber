@@ -16,7 +16,7 @@ def make_source_repo(path):
     for name in ("install.sh", "bootstrap.sh", "requirements.txt",
                  "requirements-diarization.txt", "config.example.env"):
         shutil.copy(ROOT / name, path / name)
-    for directory in ("bin", "systemd", "prompts"):
+    for directory in ("bin", "systemd", "prompts", "panel", "share"):
         shutil.copytree(ROOT / directory, path / directory,
                         ignore=shutil.ignore_patterns("__pycache__"))
     subprocess.run(GIT + ["init", "--quiet", str(path)], check=True)

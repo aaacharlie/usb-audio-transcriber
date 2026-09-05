@@ -148,7 +148,7 @@ class GroupingTests(unittest.TestCase):
             self.assertNotIn("1430 transcript", first)
             self.assertIn("## Combined transcript", first)
             self.assertIn("**[0:00:00]** Hello there.", first)
-            self.assertIn("OPENROUTER_API_KEY is not set", first)
+            self.assertIn("no summary backend is configured", first)
             self.assertEqual(
                 os.stat(fixture.vault / "2026-09-05 0900 session.md").st_mode & 0o777,
                 0o600,
@@ -265,14 +265,51 @@ class SummaryTests(unittest.TestCase):
 
             body = written[0].read_text(encoding="utf-8")
             self.assertIn("Great meeting.", body)
-            self.assertIn("summary_model: big/model", body)
+            self.assertIn("summary_model: openrouter:big/model", body)
             llm.assert_called_once()
             prompt = llm.call_args.args[0]
             self.assertIn("very knowledgeable in real estate", prompt)
             self.assertLess(prompt.index("Rent goes up."), prompt.index("Roof leaks."))
             self.assertIn("=== Recording 1: 2026-09-05 09:00 to 09:30", prompt)
-            self.assertEqual(llm.call_args.args[1:3], ("key", "big/model"))
+            self.assertEqual(sessions.SUMMARY_MODEL, "openrouter:big/model")
             self.assertEqual([row[3] for row in fixture.rows()], [1])
+
+    def test_a_command_backend_summarizes_through_the_configured_tool(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = root / "summarize.sh"
+            tool.write_text(
+                "#!/usr/bin/env bash\n"
+                "grep -q 'Hello there' && printf '## Executive summary\\nFrom the tool.'\n",
+                encoding="utf-8",
+            )
+            tool.chmod(0o755)
+            fixture = Fixture(root, SUMMARY_BACKEND="command", SUMMARY_COMMAND=str(tool))
+            fixture.recording(at(9, 30), 30)
+            sessions = load_sessions(fixture.config)
+
+            written = fixture.run(sessions)
+
+            body = written[0].read_text(encoding="utf-8")
+            self.assertIn("From the tool.", body)
+            self.assertIn("summary_model: command:summarize.sh", body)
+            self.assertEqual([row[3] for row in fixture.rows()], [1])
+
+    def test_test_backend_command_reports_the_reply_or_the_absence_of_a_backend(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            sessions = load_sessions(fixture.config)
+            output = io.StringIO()
+            with mock.patch("sys.stdout", output):
+                self.assertEqual(sessions.main(["test-backend"]), 1)
+            self.assertIn("No summary backend", output.getvalue())
+
+            with_backend = load_sessions(fixture.config | {"OPENROUTER_API_KEY": "key"})
+            output = io.StringIO()
+            with mock.patch.object(with_backend.BACKEND, "complete", return_value="OK"), \
+                    mock.patch("sys.stdout", output):
+                self.assertEqual(with_backend.main(["test-backend"]), 0)
+            self.assertIn("Reply: OK", output.getvalue())
 
     def test_summary_failure_keeps_the_note(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -299,6 +336,36 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual([note.name for note in written], ["2026-09-05 0900 session.md"])
             self.assertEqual(len(list(fixture.vault.glob("*session*.md"))), 1)
             self.assertIn("Done.", written[0].read_text(encoding="utf-8"))
+            self.assertEqual([row[3] for row in fixture.rows()], [1])
+
+    def test_a_failed_rerun_keeps_the_existing_note(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key")
+            fixture.recording(at(9, 30), 30)
+            sessions = load_sessions(fixture.config)
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nFirst."):
+                written = fixture.run(sessions)
+            ident = fixture.rows()[0][0]
+
+            with mock.patch.object(sessions, "call_llm", side_effect=RuntimeError("tool missing")):
+                fixture.run(sessions, "summarize_selected", idents=[ident])
+
+            self.assertIn("First.", written[0].read_text(encoding="utf-8"))
+            self.assertEqual([row[3] for row in fixture.rows()], [1])
+
+    def test_manual_summarize_ignores_the_backfill_guard_and_the_automatic_switch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key",
+                              SESSION_BACKFILL_DAYS="7", SESSION_SUMMARY="0")
+            fixture.recording(datetime(2026, 8, 1, 9, 30), 30)
+            sessions = load_sessions(fixture.config)
+            fixture.run(sessions)
+            ident = fixture.rows()[0][0]
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nAsked for.") as llm:
+                written = fixture.run(sessions, "summarize_selected", idents=[ident])
+
+            llm.assert_called_once()
+            self.assertIn("Asked for.", written[0].read_text(encoding="utf-8"))
             self.assertEqual([row[3] for row in fixture.rows()], [1])
 
     def test_rebuild_regenerates_one_day(self):

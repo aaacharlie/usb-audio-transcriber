@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import notify
-from llm import call_llm, split_windows
+from llm import backend_from_config, split_windows
 from model_profiles import artifact_path, artifacts_complete, profiles_for_config
 from pipeline_config import ROOT, load, log, sync_directory
 
@@ -31,20 +31,25 @@ GAP = timedelta(minutes=int(CFG.get("SESSION_GAP_MIN", "20") or 20))
 # days ago get a note but no automatic AI summary (empty = summarize all).
 BACKFILL_DAYS = CFG.get("SESSION_BACKFILL_DAYS", "7").strip()
 BACKFILL = timedelta(days=int(BACKFILL_DAYS)) if BACKFILL_DAYS else None
-OR_KEY = CFG.get("OPENROUTER_API_KEY", "").strip()
-SUMMARY_MODEL = (CFG.get("SESSION_SUMMARY_MODEL", "").strip()
-                 or CFG.get("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5"))
-SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and bool(OR_KEY)
+BACKEND = backend_from_config(
+    CFG, model_override=CFG.get("SESSION_SUMMARY_MODEL", "").strip() or None)
+SUMMARY_MODEL = BACKEND.describe() if BACKEND else "none"
+SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and BACKEND is not None
 SUBJECT = CFG.get("SESSION_SUBJECT", "").strip() or "the subject matter of these recordings"
 PROMPT_FILE = Path(CFG.get("SESSION_PROMPT_FILE", "").strip()
                    or ROOT / "prompts" / "session-summary.md")
 WINDOW = int(CFG.get("MAP_WINDOW_CHARS", "80000"))
-NO_KEY_HINT = (
-    "> No AI summary was generated because OPENROUTER_API_KEY is not set. "
+NO_BACKEND_HINT = (
+    "> No AI summary was generated because no summary backend is configured. "
     "Paste the combined transcript below into an AI model together with the "
-    "prompt in prompts/session-summary.md, or set the key to have it done "
-    "automatically."
+    "prompt in prompts/session-summary.md, or run setup.py (or set "
+    "SUMMARY_BACKEND in config.env) to have it done automatically."
 )
+
+
+def call_llm(prompt, max_tokens=2000):
+    """Send one prompt to the configured session summary backend."""
+    return BACKEND.complete(prompt, max_tokens=max_tokens)
 
 
 def hhmmss(seconds):
@@ -172,8 +177,7 @@ def summarize_session(text):
     """Summarize one session's transcripts; long sessions go through map-reduce."""
     template = load_template()
     if len(text) <= WINDOW:
-        return call_llm(f"{template}\n\nTRANSCRIPTS:\n\n{text}", OR_KEY, SUMMARY_MODEL,
-                        max_tokens=4000)
+        return call_llm(f"{template}\n\nTRANSCRIPTS:\n\n{text}", max_tokens=4000)
     windows = split_windows(text, WINDOW)
     log(f"  long session: map-reduce over {len(windows)} windows")
     partials = []
@@ -182,15 +186,13 @@ def summarize_session(text):
             f"This is part {number} of {len(windows)} of the transcripts from one "
             "session. Summarize this part in detail and in order, keeping names, "
             "numbers, dates, decisions, and open questions. Output Markdown bullet "
-            f"points only.\n\nPART {number}:\n{chunk}",
-            OR_KEY, SUMMARY_MODEL, max_tokens=2000))
+            f"points only.\n\nPART {number}:\n{chunk}", max_tokens=2000))
     joined = "\n\n".join(f"PART {number} NOTES:\n{partial}"
                          for number, partial in enumerate(partials, 1))
     return call_llm(
         f"{template}\n\nThe transcripts were too long to send at once, so below are "
         "detailed, in-order notes on each part instead of the raw text. Treat them "
-        f"as the transcripts.\n\nPART NOTES:\n\n{joined}",
-        OR_KEY, SUMMARY_MODEL, max_tokens=4000)
+        f"as the transcripts.\n\nPART NOTES:\n\n{joined}", max_tokens=4000)
 
 
 def write_private_text(path, text):
@@ -254,7 +256,7 @@ def render_note(members, summary_md, summary_status, ident):
                   "days before it was written (SESSION_BACKFILL_DAYS). Run "
                   "`sessions.py retry` to summarize older sessions on demand.", ""]
     else:
-        lines += [NO_KEY_HINT, ""]
+        lines += [NO_BACKEND_HINT, ""]
     lines += ["## Recordings", ""]
     for member in members:
         minutes = round(member["duration"] / 60)
@@ -274,11 +276,26 @@ def render_note(members, summary_md, summary_status, ident):
     return "\n".join(lines)
 
 
-def build_summary(members, force=False):
-    """Return (markdown, status): ok, failed, disabled, no_key, or backfill."""
-    if not OR_KEY:
-        return None, "no_key"
-    if not SUMMARIZE:
+def use_backend(name):
+    """Switch the summary backend for this run (the panel's per-run choice)."""
+    global BACKEND, SUMMARY_MODEL, SUMMARIZE
+    config = dict(CFG)
+    config["SUMMARY_BACKEND"] = name
+    BACKEND = backend_from_config(
+        config, model_override=CFG.get("SESSION_SUMMARY_MODEL", "").strip() or None)
+    SUMMARY_MODEL = BACKEND.describe() if BACKEND else "none"
+    SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and BACKEND is not None
+
+
+def build_summary(members, force=False, manual=False):
+    """Return (markdown, status): ok, failed, disabled, no_backend, or backfill.
+
+    `force` ignores the backfill age limit; `manual` also ignores
+    SESSION_SUMMARY=0, because a person asked for this one explicitly.
+    """
+    if BACKEND is None:
+        return None, "no_backend"
+    if not SUMMARIZE and not manual:
         return None, "disabled"
     if not force and BACKFILL is not None:
         ended = max(member["end"] for member in members)
@@ -291,12 +308,16 @@ def build_summary(members, force=False):
         return str(exc), "failed"
 
 
-def write_session(con, members, note=None, force=False):
+def write_session(con, members, note=None, force=False, manual=False):
     ident = session_id(members)
     start = min(member["start"] for member in members)
     end = max(member["end"] for member in members)
-    summary_md, status = build_summary(members, force)
+    summary_md, status = build_summary(members, force, manual)
     VAULT.mkdir(parents=True, exist_ok=True)
+    if status == "failed" and note is not None and note.exists():
+        # A re-run that fails must not replace a note that already has a summary.
+        log(f"  keeping the existing note unchanged: {note.name}")
+        return note
     note = note or unique_note_path(start)
     write_private_text(note, render_note(members, summary_md, status, ident))
     con.execute(
@@ -357,6 +378,26 @@ def retry(con):
     return written
 
 
+def summarize_selected(con, idents):
+    """Summarize chosen sessions now, rewriting their notes in place."""
+    written = []
+    for ident in idents:
+        row = con.execute("SELECT members, note FROM sessions WHERE id=?", (ident,)).fetchone()
+        if not row:
+            log(f"  session {ident}: not found")
+            continue
+        members_json, note = row
+        digests = set(json.loads(members_json))
+        members = load_recordings(con, digests)
+        if len(members) != len(digests) or not all(m["complete"] for m in members):
+            log(f"  session {ident}: recordings missing or incomplete, skipping")
+            continue
+        written.append(write_session(con, members, note=Path(note), force=True, manual=True))
+    if not written:
+        log("No sessions were summarized.")
+    return written
+
+
 def rebuild(con, date):
     """Forget the sessions that started on a date and regenerate them."""
     rows = con.execute(
@@ -370,15 +411,31 @@ def rebuild(con, date):
     return auto(con)
 
 
+def test_backend():
+    """Send a tiny prompt through the configured backend and show what came back."""
+    if BACKEND is None:
+        print("No summary backend is configured (SUMMARY_BACKEND). Summaries are off.")
+        return 1
+    print(f"Backend: {BACKEND.describe()}")
+    try:
+        reply = BACKEND.complete("Reply with exactly the word OK and nothing else.",
+                                 max_tokens=20)
+    except Exception as exc:
+        print(f"FAILED: {exc}")
+        return 1
+    print(f"Reply: {reply[:200]}")
+    return 0
+
+
 def list_sessions(con):
     rows = con.execute(
-        "SELECT started_at, ended_at, members, summarized, note FROM sessions "
+        "SELECT started_at, ended_at, members, summarized, note, id FROM sessions "
         "ORDER BY started_at"
     ).fetchall()
-    for started, ended, members, summarized, note in rows:
+    for started, ended, members, summarized, note, ident in rows:
         count = len(json.loads(members))
         print(f"{started} to {ended[11:16]}  {count:2} recording(s)  "
-              f"summary: {'yes' if summarized else 'no'}  {Path(note).name}")
+              f"summary: {'yes' if summarized else 'no'}  {Path(note).name}  id={ident}")
     if not rows:
         print("No session notes yet.")
     return rows
@@ -387,14 +444,25 @@ def list_sessions(con):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", default="auto",
-                        choices=("auto", "list", "retry", "rebuild"))
+                        choices=("auto", "list", "retry", "rebuild", "summarize",
+                                 "test-backend"))
     parser.add_argument("--date", help="YYYY-MM-DD, required for rebuild")
+    parser.add_argument("--id", action="append", default=[], metavar="SESSION_ID",
+                        help="session to summarize (repeatable); ids are in `list`")
+    parser.add_argument("--backend", choices=("command", "openai", "openrouter"),
+                        help="use this summary backend for this run only")
     args = parser.parse_args(argv)
     if args.command == "rebuild" and not args.date:
         parser.error("rebuild needs --date YYYY-MM-DD")
+    if args.command == "summarize" and not args.id:
+        parser.error("summarize needs at least one --id")
+    if args.backend:
+        use_backend(args.backend)
     if args.command == "auto" and not ENABLED:
         log("Session notes are disabled (SESSION_NOTES=0).")
         return 0
+    if args.command == "test-backend":
+        return test_backend()
     STATE_DB.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(STATE_DB)
     try:
@@ -405,6 +473,8 @@ def main(argv=None):
             list_sessions(con)
         elif args.command == "retry":
             retry(con)
+        elif args.command == "summarize":
+            summarize_selected(con, args.id)
         else:
             rebuild(con, args.date)
     finally:

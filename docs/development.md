@@ -4,7 +4,9 @@
 
 ```text
 bin/                 Python entry points and run-cycle shell script
+panel/               the control panel page served by bin/panel.py
 prompts/             default AI prompt templates deployed with the program
+share/               app-menu entry and icon for the control panel
 systemd/             user service, timer, and plug-in trigger units
 tests/               standard-library unittest suite
 docs/                project documentation

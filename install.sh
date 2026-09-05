@@ -50,7 +50,7 @@ chmod 600 "$INSTALL_ROOT/config.env"
 "$INSTALL_ROOT/venv/bin/python" "$SOURCE_ROOT/bin/doctor.py" \
   --config "$INSTALL_ROOT/config.env" --skip-systemd
 
-for directory in bin systemd prompts; do
+for directory in bin systemd prompts panel share; do
   rm -rf "$INSTALL_ROOT/$directory"
   cp -a "$SOURCE_ROOT/$directory" "$INSTALL_ROOT/$directory"
 done
@@ -60,7 +60,10 @@ cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py" \
   "$INSTALL_ROOT/bin/sessions.py" "$INSTALL_ROOT/bin/notify.py" \
-  "$INSTALL_ROOT/bin/setup.py" "$INSTALL_ROOT/bin/search.py"
+  "$INSTALL_ROOT/bin/setup.py" "$INSTALL_ROOT/bin/search.py" \
+  "$INSTALL_ROOT/bin/panel.py"
+(git -C "$SOURCE_ROOT" describe --tags --always 2>/dev/null || echo unknown) \
+  > "$INSTALL_ROOT/VERSION"
 
 # First-run wizard: find the Obsidian vault and write the essentials. It only
 # runs for a brand-new config.env and only where someone can answer.
@@ -78,7 +81,7 @@ fi
 # systemd expands % specifiers in unit files, and an unquoted patsub
 # replacement expands & on bash 5.2+, so escape/quote both.
 rendered_root="${INSTALL_ROOT//\%/%%}"
-for unit in "$APP_NAME.service" "$APP_NAME-plug.service"; do
+for unit in "$APP_NAME.service" "$APP_NAME-plug.service" "$APP_NAME-panel.service"; do
   template=$(<"$SOURCE_ROOT/systemd/$unit")
   printf '%s\n' "${template//@INSTALL_ROOT@/"$rendered_root"}" > "$UNIT_DIR/$unit"
 done
@@ -87,11 +90,23 @@ cp "$SOURCE_ROOT/systemd/$APP_NAME-plug.path" "$UNIT_DIR/$APP_NAME-plug.path"
 systemctl --user daemon-reload
 systemctl --user enable --now "$APP_NAME.timer"
 systemctl --user enable --now "$APP_NAME-plug.path"
+systemctl --user enable --now "$APP_NAME-panel.service"
+
+# App menu entry and icon for the control panel.
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+mkdir -p "$DATA_HOME/applications" "$DATA_HOME/icons/hicolor/scalable/apps"
+desktop=$(<"$SOURCE_ROOT/share/$APP_NAME.desktop")
+printf '%s\n' "${desktop//@INSTALL_ROOT@/"$rendered_root"}" \
+  > "$DATA_HOME/applications/$APP_NAME.desktop"
+cp "$SOURCE_ROOT/share/$APP_NAME.svg" "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg"
+command -v update-desktop-database >/dev/null && \
+  update-desktop-database "$DATA_HOME/applications" 2>/dev/null || true
 
 cat <<EOF
 Installed $APP_NAME to $INSTALL_ROOT
 Timer status: systemctl --user status $APP_NAME.timer
 Plug-in trigger: systemctl --user status $APP_NAME-plug.path
-Edit settings: $INSTALL_ROOT/config.env
-Change where notes go: $INSTALL_ROOT/bin/setup.py
+Control panel: "USB Audio Transcriber" in your app menu, or $INSTALL_ROOT/bin/panel.py open
+Edit settings: in the panel, or $INSTALL_ROOT/config.env
+Change where notes go: the panel's Settings page, or $INSTALL_ROOT/bin/setup.py
 EOF

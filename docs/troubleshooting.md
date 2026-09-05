@@ -84,6 +84,13 @@ $PYTHON $APP/bin/model-cache.py download fast
 
 Check free disk space and network access. For GPU configurations, verify that the selected `WHISPER_DEVICE` and `WHISPER_COMPUTE` are supported by the installed CTranslate2 stack. Switching back to `cpu` / `int8` is the conservative diagnostic baseline.
 
+## The control panel does not open
+
+- `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` starts one itself and prints the link.
+- "This panel needs its private link" means the browser has no token: open it from the app menu or with `bin/panel.py open` rather than by typing the address.
+- If the port is taken, change `PANEL_PORT` in `config.env` and restart the service.
+- Buttons that need systemd (run now, pause, resume) are disabled where systemd is not available.
+
 ## Search finds nothing
 
 - Run `search.py --index` once; the index is built from the JSON sidecars next to the archived audio, and only completed recordings are indexed.
@@ -102,6 +109,12 @@ Check free disk space and network access. For GPU configurations, verify that th
 - `DIARIZATION=1` needs `./install.sh --with-diarization` and a Hugging Face token whose account accepted the terms of both `pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0`. The doctor checks the package and the token; the log line `speaker labelling failed` names the actual error.
 - A pipeline that loads as `None` means the model terms were not accepted for that token.
 - Labelling is slow on CPU and needs memory on top of the Whisper model; the recording is still transcribed if it fails.
+
+## AI summaries fail
+
+- Run `sessions.py test-backend`. It sends a one-word prompt through the configured backend and prints the reply or the error.
+- `command` backend: the command runs through `bash -c` under the background service, whose `PATH` may not include tools installed in your home folder; use the full path (`which codex` in a terminal shows it). The tool must be signed in already; the log line `session summary failed` carries the last line of its error output. Raise `SUMMARY_COMMAND_TIMEOUT` for slow tools.
+- `openai` backend: check that the server is running (`ollama list`) and that `LLM_MODEL` names a pulled model.
 
 ## OpenRouter summarization fails
 

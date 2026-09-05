@@ -256,6 +256,30 @@ class DoctorSessionTests(unittest.TestCase):
             failures,
         )
 
+    def test_summary_backend_settings_are_validated(self):
+        base = self.base_config
+        self.assertIn("SUMMARY_BACKEND must be none, openrouter, openai, or command",
+                      doctor.check_config(base(SUMMARY_BACKEND="carrier pigeon")))
+        self.assertIn("SUMMARY_BACKEND=openrouter needs OPENROUTER_API_KEY",
+                      doctor.check_config(base(SUMMARY_BACKEND="openrouter")))
+        self.assertIn("SUMMARY_BACKEND=openai needs LLM_MODEL (for example llama3.1:8b)",
+                      doctor.check_config(base(SUMMARY_BACKEND="openai")))
+        self.assertIn("LLM_BASE_URL must start with http:// or https://",
+                      doctor.check_config(base(SUMMARY_BACKEND="openai", LLM_MODEL="m",
+                                               LLM_BASE_URL="localhost:11434")))
+        self.assertIn("SUMMARY_BACKEND=command needs SUMMARY_COMMAND",
+                      doctor.check_config(base(SUMMARY_BACKEND="command")))
+        self.assertIn("SUMMARY_COMMAND_TIMEOUT must be a positive integer",
+                      doctor.check_config(base(SUMMARY_COMMAND_TIMEOUT="soon")))
+        self.assertEqual(doctor.check_config(base(SUMMARY_BACKEND="command",
+                                                  SUMMARY_COMMAND="codex exec -")), [])
+        self.assertEqual(doctor.check_config(base(SUMMARY_BACKEND="")), [])
+
+    def test_panel_port_is_validated(self):
+        self.assertIn("PANEL_PORT must be a number between 1 and 65535",
+                      doctor.check_config(self.base_config(PANEL_PORT="99999")))
+        self.assertEqual(doctor.check_config(self.base_config(PANEL_PORT="8765")), [])
+
     def test_bundled_prompt_needs_no_setting(self):
         self.assertEqual(doctor.check_config(self.base_config(SESSION_PROMPT_FILE="")), [])
 

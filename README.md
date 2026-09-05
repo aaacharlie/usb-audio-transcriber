@@ -30,18 +30,27 @@ Prefer to read the code first? Clone the repository and run `./install.sh`; see 
 ## What you get
 
 - **Zero-touch workflow.** A systemd user service watches for the recorder. A cycle starts the moment the drive mounts, with a one-minute timer as the safety net. You never run a command after setup.
-- **Session notes with an executive summary.** Recordings less than 20 minutes apart become one session note: links to every transcript, one combined transcript in order, and, with an OpenRouter key, an AI summary written from a prompt you can edit. The stitching works offline; only the summary needs a key.
+- **Session notes with an executive summary.** Recordings less than 20 minutes apart become one session note: links to every transcript, one combined transcript in order, and an AI summary written from a prompt you can edit. The stitching works offline; the summary can use a tool you already pay for (Codex, Claude Code), a local Ollama model, or OpenRouter.
 - **Any folder, not only USB.** Point `WATCH_DIRS` at a Syncthing, Nextcloud, or Dropbox folder and phone voice memos are transcribed too. Files there are never deleted.
 - **Built for Obsidian.** The setup wizard finds your vault. Notes carry YAML front matter and tags, session notes use `[[wikilinks]]`, so backlinks and the graph view just work, and Obsidian Sync or Syncthing carry everything to your phone.
-- **Private by default.** Audio never leaves your computer. Optional summaries send transcript text only, and only when you set a key.
+- **Private by default.** Audio never leaves your computer. Optional summaries send transcript text only, and only to the backend you choose; with Ollama even that stays local.
 - **Never loses a recording.** Every copy is SHA-256 verified before it enters the queue, duplicates are detected by content rather than filename, and the USB source is never deleted unless you opt in.
 - **Speaker labels, optionally.** Turn on pyannote diarization for `Speaker 1` / `Speaker 2` labels, computed locally.
 - **Desktop-friendly.** A progress window with a time estimate, and a notification you can click to open the finished note.
 - **Runs headless.** No desktop? Put it on a Raspberry Pi or a home server and let the notes land in a synced folder.
 - **Search everything from the terminal.** `search.py roof leak` finds every matching moment across all your recordings, newest first, with the timestamp and speaker.
+- **A control panel.** A window from your app menu, and from your phone if you like, with the pipeline's state, sessions with a Summarize button, search, and every setting as a form. Everything in it is also a terminal command.
 - **Pick your speed.** `fast` transcribed a 58-minute recording in about 17 minutes on a plain CPU. `accurate` is there for hard audio, and `both` gives you an A/B comparison from the same file.
 
 Good fits: lectures and classes, meetings and site visits, interviews, long phone calls on speaker, and voice memos you would otherwise never listen to again.
+
+## The control panel
+
+<p align="center">
+  <img src="docs/assets/panel-home.png" alt="The control panel's home screen: pipeline state, library counts, summary backend, Whisper models, recent recordings" width="100%">
+</p>
+
+Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel: what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
 
 ## Real-world test: a $50 recorder from Amazon
 
@@ -64,7 +73,7 @@ Raw Whisper output from a pocket recorder can look underwhelming at first glance
 
 The raw transcript is the input to the last step. Give the transcripts of a session to a current frontier model (tested with GPT 5.6 Sol) and ask it to put them in order and summarize them. The model reads straight through the transcription noise, reconstructs the flow of the conversation, and returns a very high quality executive summary of the whole session.
 
-The pipeline can do this for you. Set `OPENROUTER_API_KEY` in `config.env`, name a strong model in `SESSION_SUMMARY_MODEL`, and tell it what your recordings are about in `SESSION_SUBJECT`. Every session note then opens with the summary, generated from [`prompts/session-summary.md`](prompts/session-summary.md), which you can edit.
+The pipeline can do this for you, and it does not need a pay-per-token bill: point `SUMMARY_BACKEND` at a command-line AI tool you already subscribe to (Codex with a ChatGPT plan, Claude Code, Gemini CLI), at a local Ollama model, or at OpenRouter, and tell it what your recordings are about in `SESSION_SUBJECT`. The setup wizard asks exactly these questions and can be re-run any time. Every session note then opens with the summary, generated from [`prompts/session-summary.md`](prompts/session-summary.md), which you can edit.
 
 To do it by hand instead, or with a model of your own choosing:
 
@@ -114,7 +123,7 @@ Either way, remember that pasting a transcript into a cloud AI sends its text to
 ## Privacy and safety
 
 - Transcription and speaker labelling are local. Audio is not uploaded by this project.
-- Optional OpenRouter summarization is disabled by default. If you set `OPENROUTER_API_KEY`, transcript text, never audio, is sent to OpenRouter for the per-recording and session summaries.
+- AI summaries are off until you pick a backend. Then transcript text, never audio, goes to that backend: your own machine with Ollama, the provider behind a subscription tool such as Codex or Claude Code, or OpenRouter.
 - Source audio on the USB drive is never deleted by default (`PURGE_DEVICE=0`), and files in `WATCH_DIRS` are never deleted at all.
 - Do not commit `config.env`: it can contain API keys. The included `.gitignore` excludes it and all runtime data.
 
@@ -124,7 +133,7 @@ Either way, remember that pasting a transcript into a cloud AI sends its text to
 - Python 3.10+
 - `ffmpeg` for audio decoding
 - `git` for the one-line installer
-- Optional: `zenity` for the progress window, `libnotify-bin` for notifications
+- Optional: `zenity` for the progress window, `libnotify-bin` for notifications, a web browser for the control panel
 - Internet access the first time faster-whisper downloads the configured model
 
 On Ubuntu/Debian:
@@ -191,10 +200,11 @@ It checks configuration, required commands and Python packages, writable output 
 - `WATCH_DIRS`: extra folders to scan, colon-separated, for synced phone memos or shares.
 - `RECORDER_DIR` and `AUDIO_EXTS`: the folder name and file types your recorder uses.
 - `WHISPER_MODEL_PROFILE`: `fast`, `accurate`, or `both`.
-- `OPENROUTER_API_KEY`, `SESSION_SUMMARY_MODEL`, `SESSION_SUBJECT`: optional AI summaries and the model and topic used for them.
+- `SUMMARY_BACKEND` and its companions: optional AI summaries through a subscription command-line tool, a local Ollama model, or OpenRouter; `SESSION_SUBJECT` tells the model the topic.
 - `SESSION_GAP_MIN`: how long a silence has to be before a new session starts (20 minutes).
 - `DIARIZATION` and `HF_TOKEN`: optional speaker labels.
 - `HEADLESS` and `NOTIFY`: desktop window and notifications, `auto` by default.
+- `PANEL_BIND` and `PANEL_PORT`: where the control panel listens; `0.0.0.0` lets your phone open it.
 - `PURGE_DEVICE`: leave at `0` unless you explicitly want copied recordings removed from the USB device.
 
 ### Whisper model choices

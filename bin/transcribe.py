@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import diarize
 import notify
-from llm import call_llm, split_windows
+from llm import backend_from_config, split_windows
 from model_profiles import artifact_path, artifacts_complete, profiles_for_config
 from pipeline_config import load, log, sync_directory, write_progress
 
@@ -27,8 +27,7 @@ LANG = CFG.get("WHISPER_LANG", "en") or None
 TASK = CFG.get("WHISPER_TASK", "transcribe") or "transcribe"
 VAD = CFG.get("VAD_ENABLED", "1") == "1"
 VAD_MS = int(CFG.get("VAD_MIN_SILENCE_MS", "1200"))
-OR_KEY = CFG.get("OPENROUTER_API_KEY", "").strip()
-OR_MODEL = CFG.get("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5")
+BACKEND = backend_from_config(CFG)
 FILE_SUMMARY = CFG.get("FILE_SUMMARY", "1").strip() == "1"
 WINDOW = int(CFG.get("MAP_WINDOW_CHARS", "80000"))
 DIARIZE = CFG.get("DIARIZATION", "0").strip() == "1"
@@ -64,31 +63,30 @@ def write_private_text(path, text):
 
 
 def summarize(transcript):
-    """Optionally summarize one recording via OpenRouter; no key keeps it local."""
-    if not OR_KEY or not FILE_SUMMARY:
+    """Optionally summarize one recording; no configured backend keeps it local."""
+    if BACKEND is None or not FILE_SUMMARY:
         return None
     try:
         if len(transcript) <= WINDOW:
-            return call_llm(
+            return BACKEND.complete(
                 "You are summarizing a raw audio transcript. It may contain multiple "
                 f"conversations. Produce markdown with exactly these sections:\n\n{SECTIONS}"
-                f"\n\nTRANSCRIPT:\n{transcript}", OR_KEY, OR_MODEL,
+                f"\n\nTRANSCRIPT:\n{transcript}", max_tokens=2000,
             )
         partials = []
         windows = split_windows(transcript, WINDOW)
         log(f"  long transcript: map-reduce over {len(windows)} windows")
         for number, chunk in enumerate(windows, 1):
-            partials.append(call_llm(
+            partials.append(BACKEND.complete(
                 f"Summarize part {number} of {len(windows)} of an audio transcript. "
                 "State only topics, commitments, and entities actually mentioned.\n\n"
-                f"PART {number}:\n{chunk}", OR_KEY, OR_MODEL, max_tokens=1200))
+                f"PART {number}:\n{chunk}", max_tokens=1200))
         joined = "\n\n---\n\n".join(
             f"PART {number} SUMMARY:\n{partial}"
             for number, partial in enumerate(partials, 1))
-        return call_llm(
+        return BACKEND.complete(
             f"Merge these sequential transcript summaries. Produce markdown with exactly "
-            f"these sections:\n\n{SECTIONS}\n\n{joined}", OR_KEY, OR_MODEL,
-            max_tokens=2500)
+            f"these sections:\n\n{SECTIONS}\n\n{joined}", max_tokens=2500)
     except Exception as exc:
         log(f"  summarization failed ({exc}) - writing transcript only")
         return None

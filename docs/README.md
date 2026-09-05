@@ -8,6 +8,7 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 - [Configuration reference](configuration.md) — every supported setting and how changes are applied
 - [Whisper model profiles](model-profiles.md) — model trade-offs, measured results, disk/RAM behavior, and selection advice
 - [Obsidian](obsidian.md) — the setup wizard, what lands in the vault, wikilinks and backlinks, sync
+- [The control panel](panel.md) — the desktop window: state, sessions with a Summarize button, search, every setting as a form, tools
 
 ## Understand the system
 

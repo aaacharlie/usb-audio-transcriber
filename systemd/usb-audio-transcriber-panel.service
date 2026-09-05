@@ -1,0 +1,12 @@
+[Unit]
+Description=USB Audio Transcriber control panel (local web app)
+
+[Service]
+Type=simple
+UMask=0077
+ExecStart="@INSTALL_ROOT@/venv/bin/python" "@INSTALL_ROOT@/bin/panel.py" serve
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
