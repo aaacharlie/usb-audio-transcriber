@@ -40,9 +40,11 @@ if [ "$WITH_DIARIZATION" = 1 ]; then
   "$INSTALL_ROOT/venv/bin/pip" install -r "$SOURCE_ROOT/requirements-diarization.txt"
 fi
 
+FRESH_CONFIG=0
 if [ ! -f "$INSTALL_ROOT/config.env" ]; then
   cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.env"
-  echo "Created $INSTALL_ROOT/config.env; edit it to select your output locations."
+  FRESH_CONFIG=1
+  echo "Created $INSTALL_ROOT/config.env."
 fi
 chmod 600 "$INSTALL_ROOT/config.env"
 "$INSTALL_ROOT/venv/bin/python" "$SOURCE_ROOT/bin/doctor.py" \
@@ -57,7 +59,21 @@ cp "$SOURCE_ROOT/requirements-diarization.txt" "$INSTALL_ROOT/requirements-diari
 cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py" \
-  "$INSTALL_ROOT/bin/sessions.py" "$INSTALL_ROOT/bin/notify.py"
+  "$INSTALL_ROOT/bin/sessions.py" "$INSTALL_ROOT/bin/notify.py" \
+  "$INSTALL_ROOT/bin/setup.py"
+
+# First-run wizard: find the Obsidian vault and write the essentials. It only
+# runs for a brand-new config.env and only where someone can answer.
+if [ "$RUN_SETUP" = 1 ] && [ "$FRESH_CONFIG" = 1 ]; then
+  if [ -t 0 ] || [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+    "$INSTALL_ROOT/venv/bin/python" "$INSTALL_ROOT/bin/setup.py" \
+      --config "$INSTALL_ROOT/config.env" || true
+    "$INSTALL_ROOT/venv/bin/python" "$INSTALL_ROOT/bin/doctor.py" \
+      --config "$INSTALL_ROOT/config.env" --skip-systemd
+  else
+    echo "Run $INSTALL_ROOT/bin/setup.py later to point the notes at your Obsidian vault."
+  fi
+fi
 
 # systemd expands % specifiers in unit files, and an unquoted patsub
 # replacement expands & on bash 5.2+, so escape/quote both.
@@ -77,4 +93,5 @@ Installed $APP_NAME to $INSTALL_ROOT
 Timer status: systemctl --user status $APP_NAME.timer
 Plug-in trigger: systemctl --user status $APP_NAME-plug.path
 Edit settings: $INSTALL_ROOT/config.env
+Change where notes go: $INSTALL_ROOT/bin/setup.py
 EOF
