@@ -61,7 +61,7 @@ chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py" \
   "$INSTALL_ROOT/bin/sessions.py" "$INSTALL_ROOT/bin/notify.py" \
   "$INSTALL_ROOT/bin/setup.py" "$INSTALL_ROOT/bin/search.py" \
-  "$INSTALL_ROOT/bin/panel.py"
+  "$INSTALL_ROOT/bin/panel.py" "$INSTALL_ROOT/bin/app.py"
 (git -C "$SOURCE_ROOT" describe --tags --always 2>/dev/null || echo unknown) \
   > "$INSTALL_ROOT/VERSION"
 

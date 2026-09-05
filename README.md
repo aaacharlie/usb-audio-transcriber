@@ -47,7 +47,7 @@ Prefer to read the code first? Clone the repository and run `./install.sh`; see 
 - **Desktop-friendly.** A progress window with a time estimate, and a notification you can click to open the finished note.
 - **Runs headless.** No desktop? Put it on a Raspberry Pi or a home server and let the notes land in a synced folder.
 - **Search everything from the terminal.** `search.py roof leak` finds every matching moment across all your recordings, newest first, with the timestamp and speaker.
-- **A control panel.** A window from your app menu, and from your phone if you like, with the pipeline's state, sessions with a Summarize button, search, and every setting as a form. Everything in it is also a terminal command.
+- **A control panel.** A real desktop window (GTK 4) from your app menu, and a web page for your phone if you like, with the pipeline's state, sessions with a Summarize button, search, and every setting as a form. Everything in it is also a terminal command.
 - **Pick your speed.** `fast` transcribed a 58-minute recording in about 17 minutes on a plain CPU. `accurate` is there for hard audio, and `both` gives you an A/B comparison from the same file.
 
 Good fits: lectures and classes, meetings and site visits, interviews, long phone calls on speaker, and voice memos you would otherwise never listen to again.
@@ -55,10 +55,10 @@ Good fits: lectures and classes, meetings and site visits, interviews, long phon
 ## The control panel
 
 <p align="center">
-  <img src="docs/assets/panel-home.png" alt="The control panel's home screen: pipeline state, library counts, summary backend, Whisper models, recent recordings" width="100%">
+  <img src="docs/assets/panel-home.png" alt="The control panel window on its Home page: timer and plug-in trigger state, last activity, queue, library counts, and buttons to run a cycle or pause automatic runs" width="100%">
 </p>
 
-Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel as its own window (with Chrome, Chromium, Brave, or Edge installed; a browser tab otherwise): what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
+Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel, a native desktop window (GTK 4 / libadwaita; the same thing is also a web page for your phone or a machine without the GTK bindings): what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
 
 ## Real-world test: a $50 recorder from Amazon
 
@@ -141,7 +141,7 @@ Either way, remember that pasting a transcript into a cloud AI sends its text to
 - Python 3.10+
 - `ffmpeg` for audio decoding
 - `git` for the one-line installer
-- Optional: `zenity` for the progress window, `libnotify-bin` for notifications, a web browser for the control panel
+- Optional: `zenity` for the progress window, `libnotify-bin` for notifications, `python3-gi gir1.2-gtk-4.0 gir1.2-adw-1` for the control panel window (already present on most desktops; otherwise the panel opens in a browser)
 - Optional: `pipx` for the package install
 - Internet access the first time faster-whisper downloads the configured model
 

@@ -3,7 +3,8 @@
 
     usb-audio-transcriber install            set this user account up: data folder,
                                              config.env, systemd units, app-menu entry
-    usb-audio-transcriber panel open         the control panel
+    usb-audio-transcriber panel open         the control panel (desktop window)
+    usb-audio-transcriber app                the desktop window, directly
     usb-audio-transcriber doctor             check the installation
     usb-audio-transcriber setup              the setup wizard (notes folder, summaries)
     usb-audio-transcriber sessions ...       session notes: list, retry, rebuild,
@@ -44,6 +45,7 @@ ASSETS = PACKAGE if (PACKAGE / "bin").is_dir() else PACKAGE.parent
 BIN = ASSETS / "bin"
 PYTHON = sys.executable
 SCRIPTS = {
+    "app": "app.py",
     "panel": "panel.py",
     "doctor": "doctor.py",
     "setup": "setup.py",

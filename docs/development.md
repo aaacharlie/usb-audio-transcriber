@@ -4,8 +4,9 @@
 
 ```text
 bin/                    Python entry points and run-cycle shell script
+bin/app.py              the control panel window (GTK 4 / libadwaita, a client of panel.py's API)
 usb_audio_transcriber/  the pip/pipx package: the usb-audio-transcriber command (cli.py)
-panel/                  the control panel page served by bin/panel.py
+panel/                  the control panel web page served by bin/panel.py
 prompts/                default AI prompt templates deployed with the program
 share/                  app-menu entry and icon for the control panel
 systemd/                user service, timer, and plug-in trigger unit templates
@@ -51,7 +52,7 @@ Also run:
 git diff --check
 ```
 
-Tests mock model execution; they do not download model weights or transcribe real audio.
+Tests mock model execution; they do not download model weights or transcribe real audio. `bin/app.py` imports GTK only inside `run_gui()`, so its parsing and API-client helpers are unit-tested without a display; to see the window itself in a container, run it under `gtk4-broadwayd` (`GDK_BACKEND=broadway`) or `xvfb-run`.
 
 ## Manual smoke checks
 

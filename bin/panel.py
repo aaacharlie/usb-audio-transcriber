@@ -3,8 +3,10 @@
 in a terminal.
 
     panel.py serve   run the server (usb-audio-transcriber-panel.service does this)
-    panel.py open    make sure the server is running, then open the panel as its
-                     own window (Chrome, Chromium, Brave, or Edge) or in the browser
+    panel.py open    make sure the server is running, then open the panel: the
+                     desktop window (app.py) when the GTK bindings are installed,
+                     else a browser window (Chrome, Chromium, Brave, Edge), else
+                     a browser tab
     panel.py url     print the private link, for another device on your network
 
 Every button in the panel maps to a script under bin/. The server listens on
@@ -55,6 +57,9 @@ SECRET_KEYS = ("OPENROUTER_API_KEY", "LLM_API_KEY", "HF_TOKEN")
 APP_WINDOW_BROWSERS = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable",
                        "brave-browser", "microsoft-edge", "microsoft-edge-stable", "vivaldi",
                        "vivaldi-stable")
+# The desktop window (app.py) needs a Python with the GTK 4 and libadwaita bindings.
+GI_PROBE = ("import gi; gi.require_version('Gtk', '4.0'); gi.require_version('Adw', '1'); "
+            "from gi.repository import Gtk, Adw")
 SECRET_PLACEHOLDER = "********"
 ALLOWED_NOTE_SUFFIXES = {".md", ".txt", ".json"}
 
@@ -684,6 +689,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"text": log_tail(int(params.get("lines", ["200"])[0]))})
             if url.path == "/api/vaults":
                 return self.send_json([str(v) for v in setup_module.find_vaults()])
+            if url.path == "/api/link":
+                return self.send_json({"url": panel_url(for_network=True)})
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except Exception as exc:
             return self.send_json({"error": f"{type(exc).__name__}: {exc}"},
@@ -785,7 +792,7 @@ def serve(argv):
 
 
 def app_window_command(url):
-    """The command that shows the panel as its own window, or None without such a browser."""
+    """The command that shows the page as its own browser window, or None without such a browser."""
     for name in APP_WINDOW_BROWSERS:
         found = shutil.which(name)
         if found:
@@ -794,28 +801,62 @@ def app_window_command(url):
     return None
 
 
-def open_panel(argv):
-    import webbrowser
+def gui_python():
+    """A Python that can import GTK 4 and libadwaita: this one, else the system's."""
+    candidates = [PYTHON, "/usr/bin/python3", shutil.which("python3")]
+    for candidate in dict.fromkeys(c for c in candidates if c):
+        try:
+            probe = subprocess.run([candidate, "-c", GI_PROBE], capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probe.returncode == 0:
+            return candidate
+    return None
+
+
+def detached(command):
+    subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+
+
+def ensure_server():
+    """Start the server if the service is not running; return its base URL."""
     host, port = bind_settings()
     probe_host = "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
     if not is_up(port, probe_host):
-        subprocess.Popen([PYTHON, str(Path(__file__).resolve()), "serve"],
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+        detached([PYTHON, str(Path(__file__).resolve()), "serve"])
         for _ in range(50):
             if is_up(port, probe_host):
                 break
             time.sleep(0.1)
-    url = f"http://{probe_host}:{port}/?token={token()}"
-    print(url)
-    if argv.no_browser:
-        return 0
-    command = None if argv.browser else app_window_command(url)
+    return f"http://{probe_host}:{port}/"
+
+
+def open_web(base, tab=False):
+    """Show the web page: a browser window where a browser can do that, else a tab."""
+    import webbrowser
+    url = f"{base}?token={token()}"
+    command = None if tab else app_window_command(url)
     if command:
-        subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+        detached(command)
     else:
         webbrowser.open(url)
+    return 0
+
+
+def open_panel(argv):
+    base = ensure_server()
+    print(f"{base}?token={token()}")
+    if argv.no_browser:
+        return 0
+    if argv.browser or argv.web:
+        return open_web(base, tab=argv.browser)
+    python = gui_python()
+    if python is None:
+        print("The desktop window needs the GTK bindings (sudo apt install python3-gi "
+              "gir1.2-gtk-4.0 gir1.2-adw-1); opening the web page instead.", file=sys.stderr)
+        return open_web(base)
+    detached([python, str(BIN / "app.py"), "--connect", base, "--token-file", str(TOKEN_FILE)])
     return 0
 
 
@@ -826,8 +867,10 @@ def main(argv=None):
     sub.add_parser("serve", help="run the panel server in the foreground")
     opener = sub.add_parser("open", help="start the server if needed and open the panel")
     opener.add_argument("--no-browser", action="store_true", help="only print the link")
+    opener.add_argument("--web", action="store_true",
+                        help="the web page in a browser window (or tab) instead of the desktop window")
     opener.add_argument("--browser", action="store_true",
-                        help="open a browser tab even when a browser could show it as a window")
+                        help="the web page in a plain browser tab")
     sub.add_parser("url", help="print the private link (network address when PANEL_BIND allows it)")
     args = parser.parse_args(argv)
     if args.command == "serve":
