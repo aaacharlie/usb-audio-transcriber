@@ -1,3 +1,4 @@
+import importlib
 import sys
 import tempfile
 import unittest
@@ -6,7 +7,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "bin"))
-import pipeline_config
+import pipeline_config  # noqa: E402
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -31,6 +32,25 @@ class ConfigurationTests(unittest.TestCase):
                 config = pipeline_config.load(config_path)
 
             self.assertEqual(config["VAULT_DIR"], "/home/test/Transcripts")
+
+
+class LayoutTests(unittest.TestCase):
+    def test_the_data_root_can_be_moved_away_from_the_program_files(self):
+        with mock.patch.dict("os.environ", {"USB_AUDIO_TRANSCRIBER_ROOT": "/data/elsewhere"}):
+            moved = importlib.reload(pipeline_config)
+            self.assertEqual(moved.ROOT, Path("/data/elsewhere"))
+            self.assertEqual(moved.ASSETS, ROOT, "prompts and templates stay with the code")
+            self.assertEqual(moved.PROGRESS_PATH,
+                             Path("/data/elsewhere/var/state/progress.json"))
+        restored = importlib.reload(pipeline_config)
+        self.assertEqual(restored.ROOT, ROOT)
+
+    def test_version_comes_from_the_version_file_when_not_packaged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            version_file = Path(directory) / "VERSION"
+            self.assertEqual(pipeline_config.version(version_file), "dev")
+            version_file.write_text("v1.2.3-4-gabcdef\n", encoding="utf-8")
+            self.assertEqual(pipeline_config.version(version_file), "v1.2.3-4-gabcdef")
 
 
 if __name__ == "__main__":

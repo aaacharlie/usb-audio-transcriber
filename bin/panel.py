@@ -33,7 +33,7 @@ import setup as setup_module
 from llm import backend_choice, backend_from_config
 from model_profiles import artifact_path, artifacts_complete, cache_path_for, \
     directory_size, hub_cache_root, profiles_for, profiles_for_config
-from pipeline_config import ROOT, load, log, read_progress
+from pipeline_config import ROOT, load, log, read_progress, version
 
 CFG_PATH = ROOT / "config.env"
 BIN = Path(__file__).resolve().parent
@@ -321,7 +321,7 @@ def status():
         disk = None
     backend = backend_choice(config)
     return {
-        "version": VERSION_FILE.read_text(encoding="utf-8").strip() if VERSION_FILE.exists() else "dev",
+        "version": version(VERSION_FILE),
         "progress": progress,
         "queued": queued,
         "detected": detected,

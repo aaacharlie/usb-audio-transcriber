@@ -5,7 +5,7 @@ The control panel is a small web app served by the pipeline itself. With Chrome,
 ## Open it
 
 - From the app menu: the **USB Audio Transcriber** entry that `install.sh` adds.
-- From a terminal: `~/.local/share/usb-audio-transcriber/bin/panel.py open` prints the private link and opens the panel the same way; add `--browser` to force a browser tab, or `--no-browser` to only print the link.
+- From a terminal: `~/.local/share/usb-audio-transcriber/bin/panel.py open` (`usb-audio-transcriber panel open` with pipx) prints the private link and opens the panel the same way; add `--browser` to force a browser tab, or `--no-browser` to only print the link.
 - From another device, such as your phone: in Settings set "Panel listens on" to `0.0.0.0` (or `PANEL_BIND` in `config.env`), then run `bin/panel.py url` in a terminal and open the printed link on the other device.
 
 The `usb-audio-transcriber-panel.service` user unit keeps the panel running in the background; the doctor reports its state, and `panel.py open` starts a server itself if the service is not running.

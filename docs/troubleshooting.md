@@ -5,6 +5,7 @@
 ```bash
 ~/.local/share/usb-audio-transcriber/venv/bin/python \
   ~/.local/share/usb-audio-transcriber/bin/doctor.py
+usb-audio-transcriber doctor      # pipx install
 systemctl --user status usb-audio-transcriber.timer
 systemctl --user status usb-audio-transcriber-plug.path
 systemctl --user status usb-audio-transcriber.service
@@ -86,7 +87,7 @@ Check free disk space and network access. For GPU configurations, verify that th
 
 ## The control panel does not open
 
-- `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` starts one itself and prints the link.
+- `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` (`usb-audio-transcriber panel open` with pipx) starts one itself and prints the link.
 - "This panel needs its private link" means the browser has no token: open it from the app menu or with `bin/panel.py open` rather than by typing the address.
 - If the port is taken, change `PANEL_PORT` in `config.env` and restart the service.
 - Buttons that need systemd (run now, pause, resume) are disabled where systemd is not available.
