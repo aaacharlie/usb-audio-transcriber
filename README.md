@@ -50,7 +50,7 @@ Good fits: lectures and classes, meetings and site visits, interviews, long phon
   <img src="docs/assets/panel-home.png" alt="The control panel's home screen: pipeline state, library counts, summary backend, Whisper models, recent recordings" width="100%">
 </p>
 
-Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel: what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
+Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel as its own window (with Chrome, Chromium, Brave, or Edge installed; a browser tab otherwise): what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
 
 ## Real-world test: a $50 recorder from Amazon
 

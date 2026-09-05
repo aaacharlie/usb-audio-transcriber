@@ -66,6 +66,7 @@
   .tag.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
   .tag.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
   .tag.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+  .tag.busy { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
   input[type=text], input[type=password], input[type=number], input[type=date], select, textarea {
     width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
     color: var(--text); font: inherit; }
@@ -130,7 +131,7 @@
       <h3>Recent recordings</h3>
       <div id="home-recordings"></div>
       <h3>Activity</h3>
-      <div class="card" id="jobs-home"><span class="muted">Nothing running.</span></div>
+      <div class="card jobs" id="jobs-home"></div>
     </section>
 
     <section class="view" id="view-sessions">
@@ -144,6 +145,7 @@
       </div>
       <p class="hint">A session is one sitting: recordings less than a few minutes apart, stitched into one note. Summarizing sends that note's combined transcript to the backend you pick above.</p>
       <div id="sessions-table"></div>
+      <div class="activity" hidden><h3>Latest action</h3><div class="card jobs" id="jobs-sessions" data-limit="1"></div></div>
     </section>
 
     <section class="view" id="view-recordings">
@@ -173,6 +175,7 @@
         </div>
       </div>
       <p class="hint" id="settings-path"></p>
+      <div class="activity" hidden><h3>Latest action</h3><div class="card jobs" id="jobs-settings" data-limit="1"></div></div>
       <div id="settings-form"></div>
       <div id="settings-result"></div>
     </section>
@@ -209,11 +212,11 @@
           <p class="hint">To open this panel from your phone, set "Panel listens on" to 0.0.0.0 in Settings and run <code>bin/panel.py url</code> in a terminal for the private link.</p>
         </div>
       </div>
+      <h3>Activity</h3>
+      <div class="card jobs" id="jobs-tools"></div>
       <h3>Log</h3>
       <div class="row" style="margin-bottom:8px"><button class="btn small" id="btn-log">Refresh log</button></div>
       <pre id="log">Press refresh.</pre>
-      <h3>Activity</h3>
-      <div class="card" id="jobs-tools"><span class="muted">Nothing running.</span></div>
     </section>
   </main>
 </div>
@@ -229,7 +232,8 @@
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  const state = { status: null, jobs: [], sessions: [], settings: null, pollJobs: false };
+  const state = { status: null, jobs: [], sessions: [], settings: null, pollJobs: false,
+                  watching: new Set(), announced: new Set() };
 
   async function api(path, options) {
     const opts = Object.assign({ headers: {} }, options || {});
@@ -269,7 +273,9 @@
     $("version").textContent = "control panel " + (s.version || "");
     const timer = s.units && s.units.timer;
     const paused = timer && timer.active !== "active";
+    const running = state.jobs.find((j) => j.status === "running");
     if (p.active) setPill("busy", (p.phase || "Working") + (p.current_percent != null ? " " + p.current_percent + "%" : ""));
+    else if (running) setPill("busy", running.label);
     else if (s.systemd && paused) setPill("warn", "Automatic runs paused");
     else setPill("ok", "Idle, watching for the recorder");
     $("btn-pause").textContent = paused ? "Resume automatic runs" : "Pause automatic runs";
@@ -405,21 +411,40 @@
 
   // ---------------------------------------------------------------- jobs and actions
   async function startJob(kind, params) {
-    try { await api("/api/jobs", { method: "POST", body: { kind, params } }); } catch (e) { return toast(e.message); }
-    toast("Started."); state.pollJobs = true; pollJobs();
+    let job;
+    try { job = await api("/api/jobs", { method: "POST", body: { kind, params } }); } catch (e) { return toast(e.message); }
+    state.watching.add(job.id);
+    toast("Started: " + job.label);
+    state.pollJobs = true; pollJobs();
+    const box = document.querySelector("section.view.active .activity, section.view.active .jobs");
+    if (box) { box.hidden = false; setTimeout(() => box.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50); }
   }
   async function pollJobs() {
     try { state.jobs = await api("/api/jobs"); } catch (e) { return; }
     renderJobs();
-    const running = state.jobs.some((j) => j.status === "running");
+    state.jobs.forEach((j) => {
+      if (j.status !== "running" && state.watching.has(j.id) && !state.announced.has(j.id)) {
+        state.announced.add(j.id);
+        toast(j.label + (j.status === "done" ? ": done" : ": failed, see the output below"));
+      }
+    });
+    const running = state.jobs.find((j) => j.status === "running");
+    const transcribing = state.status && state.status.progress && state.status.progress.active;
+    if (running && !transcribing) setPill("busy", running.label);
     if (running) setTimeout(pollJobs, 2000);
     else { state.pollJobs = false; if (document.querySelector("#view-sessions.active")) loadSessions(); refreshStatus(); }
   }
   function renderJobs() {
-    const html = state.jobs.length ? state.jobs.map((j) => `<details class="job" ${j.status === "running" ? "" : ""}>
-      <summary><span class="tag ${j.status === "done" ? "ok" : j.status === "failed" ? "bad" : ""}">${esc(j.status)}</span> ${esc(j.label)} <span class="muted">${esc(when(j.started))}</span></summary>
-      <pre>${esc(j.output || (j.status === "running" ? "Running..." : "(no output)"))}</pre></details>`).join("") : '<span class="muted">Nothing running.</span>';
-    $("jobs-home").innerHTML = html; $("jobs-tools").innerHTML = html;
+    const newest = state.jobs.length ? state.jobs[0].id : null;
+    const row = (j) => `<details class="job" ${j.id === newest ? "open" : ""}>
+      <summary><span class="tag ${j.status === "done" ? "ok" : j.status === "failed" ? "bad" : "busy"}">${esc(j.status)}</span> <b>${esc(j.label)}</b> <span class="muted">${esc(when(j.started))}</span></summary>
+      <pre>${esc(j.output || (j.status === "running" ? "Running..." : "(no output)"))}</pre></details>`;
+    document.querySelectorAll(".jobs").forEach((box) => {
+      const limit = box.dataset.limit ? parseInt(box.dataset.limit, 10) : state.jobs.length;
+      box.innerHTML = state.jobs.length ? state.jobs.slice(0, limit).map(row).join("")
+        : '<span class="muted">Nothing running. The result of every button appears here, while it runs.</span>';
+      const wrap = box.closest(".activity"); if (wrap) wrap.hidden = !state.jobs.length;
+    });
   }
   $("btn-cycle").addEventListener("click", () => startJob("cycle", {}));
   $("btn-pause").addEventListener("click", () => {
