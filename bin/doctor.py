@@ -51,7 +51,9 @@ def check_config(config):
     for name in ("HEADLESS", "NOTIFY"):
         if config.get(name, "auto").strip().lower() not in {"auto", "0", "1"}:
             failures.append(f"{name} must be auto, 0, or 1")
-    if config.get("WHISPER_TASK", "transcribe").strip() not in {"transcribe", "translate"}:
+    # An empty value means the default, exactly as bin/transcribe.py treats it.
+    task = config.get("WHISPER_TASK", "transcribe").strip() or "transcribe"
+    if task not in {"transcribe", "translate"}:
         failures.append("WHISPER_TASK must be transcribe or translate")
     for name, default in (
         ("VAD_MIN_SILENCE_MS", "1200"),
