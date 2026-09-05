@@ -5,6 +5,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import sys
 
@@ -124,6 +125,20 @@ def writable_parent(path, is_file=False):
     return candidate if candidate.exists() else None
 
 
+def fts5_warning():
+    """Transcript search needs an SQLite built with FTS5; most are."""
+    try:
+        probe = sqlite3.connect(":memory:")
+        try:
+            probe.execute("CREATE VIRTUAL TABLE probe USING fts5(x)")
+        finally:
+            probe.close()
+    except sqlite3.OperationalError:
+        return ("SQLite has no FTS5 support: transcript search (bin/search.py) "
+                "is unavailable on this Python")
+    return None
+
+
 def linger_warning(user=None):
     """Explain that user timers stop at logout, which matters on headless machines."""
     if shutil.which("loginctl") is None:
@@ -201,6 +216,9 @@ def main(argv=None):
             print(f"OK  Python package: {package}")
         else:
             failures.append(f"Python package: {package} not importable")
+    fts = fts5_warning()
+    if fts:
+        warnings.append(fts)
     if config.get("DIARIZATION", "0").strip() == "1":
         try:
             found = importlib.util.find_spec("pyannote.audio") is not None

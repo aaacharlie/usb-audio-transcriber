@@ -60,7 +60,7 @@ cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py" \
   "$INSTALL_ROOT/bin/sessions.py" "$INSTALL_ROOT/bin/notify.py" \
-  "$INSTALL_ROOT/bin/setup.py"
+  "$INSTALL_ROOT/bin/setup.py" "$INSTALL_ROOT/bin/search.py"
 
 # First-run wizard: find the Obsidian vault and write the essentials. It only
 # runs for a brand-new config.env and only where someone can answer.

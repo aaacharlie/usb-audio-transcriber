@@ -28,7 +28,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
                               (links, combined transcript, optional AI summary)
 ```
 
-`bin/run-cycle.sh` serializes each cycle with `flock`, runs ingestion, starts the Zenity progress reader, runs transcription, and finally writes session notes. Two user-level systemd units start it: `usb-audio-transcriber.timer` about once per minute, and `usb-audio-transcriber-plug.path`, which fires `usb-audio-transcriber-plug.service` when a mount point appears under `/media/$USER`, `/run/media/$USER`, or `/mnt`. The plug-in service sleeps briefly so the mount can settle, then runs `run-cycle.sh --wait`, which waits for a timer-started cycle to finish instead of skipping, so freshly mounted recordings are handled immediately.
+`bin/run-cycle.sh` serializes each cycle with `flock`, runs ingestion, starts the Zenity progress reader, runs transcription, writes session notes, and finally refreshes the search index. Two user-level systemd units start it: `usb-audio-transcriber.timer` about once per minute, and `usb-audio-transcriber-plug.path`, which fires `usb-audio-transcriber-plug.service` when a mount point appears under `/media/$USER`, `/run/media/$USER`, or `/mnt`. The plug-in service sleeps briefly so the mount can settle, then runs `run-cycle.sh --wait`, which waits for a timer-started cycle to finish instead of skipping, so freshly mounted recordings are handled immediately.
 
 ## Components
 
@@ -37,6 +37,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 | `bin/ingest.py` | Discover recorder files and watched-folder audio, wait for stable file size, hash, archive, verify, deduplicate, and enqueue |
 | `bin/transcribe.py` | Load configured faster-whisper model profiles, transcribe queued recordings, optionally summarize, and write notes |
 | `bin/sessions.py` | Group completed recordings into sessions by time gap, write session notes with wikilinks and a combined transcript, and optionally summarize the session |
+| `bin/search.py` | Full-text search over every transcript segment; keeps an FTS5 index in the state database fresh from the JSON sidecars |
 | `bin/llm.py` | Shared OpenRouter client and text windowing used by per-file and session summaries |
 | `bin/diarize.py` | Optional pyannote speaker labelling: decode with ffmpeg, diarize, assign the best-overlapping speaker to each segment |
 | `prompts/session-summary.md` | Default session summary prompt; `{subject}` is filled from `SESSION_SUBJECT` |
@@ -48,7 +49,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 | `bin/model-cache.py` | Inspect, download, or remove supported model disk caches |
 | `bin/benchmark-models.py` | Compare models without touching the queue, database, archive, or transcript vault |
 | `systemd/*.timer`, `systemd/*-plug.path` | Start cycles on a schedule and when removable media is mounted |
-| `var/state/seen.sqlite` | Track imported recordings by SHA-256, prevent duplicate imports, and remember which recordings belong to which session note |
+| `var/state/seen.sqlite` | Track imported recordings by SHA-256, prevent duplicate imports, remember which recordings belong to which session note, and hold the full-text search index |
 | `var/state/progress.json` | Publish current progress to the desktop process |
 
 ## Safety boundaries

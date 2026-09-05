@@ -17,4 +17,5 @@ fi
     >>"$ROOT/var/logs/pipeline.log" 2>&1 9>&- &
   "$ROOT/venv/bin/python" "$ROOT/bin/transcribe.py"
   "$ROOT/venv/bin/python" "$ROOT/bin/sessions.py"
+  "$ROOT/venv/bin/python" "$ROOT/bin/search.py" --index
 } 2>&1 | tee -a "$ROOT/var/logs/pipeline.log"

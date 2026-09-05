@@ -116,6 +116,29 @@ The first run downloads the pyannote models into the Hugging Face cache. Expect 
 
 If your recordings contain speech in languages other than English, set `WHISPER_TASK="translate"` in `config.env`. faster-whisper will translate the speech directly into English instead of transcribing in the source language. You can set `WHISPER_LANG` to the specific language code (such as `es`, `fr`, or `de`) or leave it empty to auto-detect the spoken language.
 
+## Search your transcripts
+
+Every transcript segment is indexed for full-text search (SQLite FTS5 inside the state database), so you can ask "when did we talk about the roof?" from a terminal, which matters on a headless machine or when the notes live outside Obsidian:
+
+```bash
+PYTHON=~/.local/share/usb-audio-transcriber/venv/bin/python
+APP=~/.local/share/usb-audio-transcriber
+
+$PYTHON $APP/bin/search.py roof leak                       # every word must match
+$PYTHON $APP/bin/search.py plumb*                          # prefix search
+$PYTHON $APP/bin/search.py --since 2026-09-01 --speaker "Speaker 2" invoice
+$PYTHON $APP/bin/search.py --json deposit                  # for scripts
+```
+
+Hits are printed newest recording first, each with the note name, the timestamp inside the recording, the speaker label when one exists, the matching text with the matched words in brackets, and the note path:
+
+```text
+2026-09-05 0930 transcript  [0:12:03] Speaker 2: We need to fix the [roof] [leak] before winter.
+    /home/me/Vault/Recordings/2026-09-05 0930 transcript.md
+```
+
+The index refreshes at the end of every cycle and before each search, reading only sidecars that changed; `search.py --index` refreshes it by hand. Words are matched by stem, so "leaks" finds "leak"; `--raw` passes FTS5 syntax through unchanged (`roof OR gutter`, `"front door"`). The exit code is 0 with hits, 1 without, 2 on an error, like `grep`.
+
 ## Manage model caches
 
 Run cache commands with the installed virtual environment:
