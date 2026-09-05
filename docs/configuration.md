@@ -51,6 +51,7 @@ Keep `PURGE_DEVICE=0` unless device cleanup is intentional. A matching file is s
 | `WHISPER_DEVICE` | `cpu` | faster-whisper device, such as `cpu` or `cuda` |
 | `WHISPER_COMPUTE` | `int8` | CTranslate2 compute type supported by the selected device |
 | `WHISPER_LANG` | `en` | Language code; an empty value enables language detection |
+| `WHISPER_TASK` | `transcribe` | `transcribe` (default) or `translate` (translate speech directly into English) |
 | `VAD_ENABLED` | `1` | Enable voice activity detection |
 | `VAD_MIN_SILENCE_MS` | `1200` | Silence threshold used by VAD |
 

@@ -364,6 +364,101 @@ class TranscriberProfileTests(unittest.TestCase):
             self.assertEqual(accurate_start["files_completed"], 1)
             self.assertEqual(accurate_start["current_percent"], 0)
 
+    def test_transcribe_passes_configured_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / "queue"
+            queue.mkdir()
+            audio = queue / "meeting.wav"
+            audio.touch()
+            state_db = root / "state.sqlite"
+            with closing(sqlite3.connect(state_db)) as connection:
+                connection.execute(
+                    "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)", (str(audio),)
+                )
+                connection.commit()
+            module = load_transcriber({
+                "QUEUE_DIR": str(queue),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(state_db),
+                "AUDIO_EXTS": "wav",
+                "WHISPER_TASK": "translate",
+            })
+            captured_kwargs = []
+
+            class FakeSegment:
+                start = 0
+                end = 1
+                text = " Hello."
+
+            class FakeModel:
+                def __init__(self, model_id, **kwargs):
+                    pass
+
+                def transcribe(self, path, **kwargs):
+                    captured_kwargs.append(kwargs)
+                    return iter([FakeSegment()]), types.SimpleNamespace(duration=1)
+
+            fake_module = types.SimpleNamespace(WhisperModel=FakeModel)
+            with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+                    mock.patch.object(module, "write_progress"):
+                self.assertEqual(module.main(), 0)
+
+            self.assertEqual(len(captured_kwargs), 1)
+            self.assertEqual(captured_kwargs[0].get("task"), "translate")
+            note = next((root / "vault").glob("*.md"))
+            self.assertIn("task: translate", note.read_text(encoding="utf-8"))
+
+    def test_transcribe_defaults_to_transcribe_task(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / "queue"
+            queue.mkdir()
+            audio = queue / "meeting.wav"
+            audio.touch()
+            state_db = root / "state.sqlite"
+            with closing(sqlite3.connect(state_db)) as connection:
+                connection.execute(
+                    "CREATE TABLE seen (archived_to TEXT, transcribed INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO seen VALUES (?, 0)", (str(audio),)
+                )
+                connection.commit()
+            module = load_transcriber({
+                "QUEUE_DIR": str(queue),
+                "VAULT_DIR": str(root / "vault"),
+                "STATE_DB": str(state_db),
+                "AUDIO_EXTS": "wav",
+            })
+            captured_kwargs = []
+
+            class FakeSegment:
+                start = 0
+                end = 1
+                text = " Hello."
+
+            class FakeModel:
+                def __init__(self, model_id, **kwargs):
+                    pass
+
+                def transcribe(self, path, **kwargs):
+                    captured_kwargs.append(kwargs)
+                    return iter([FakeSegment()]), types.SimpleNamespace(duration=1)
+
+            fake_module = types.SimpleNamespace(WhisperModel=FakeModel)
+            with mock.patch.dict(sys.modules, {"faster_whisper": fake_module}), \
+                    mock.patch.object(module, "write_progress"):
+                self.assertEqual(module.main(), 0)
+
+            self.assertEqual(len(captured_kwargs), 1)
+            self.assertEqual(captured_kwargs[0].get("task"), "transcribe")
+            note = next((root / "vault").glob("*.md"))
+            self.assertIn("task: transcribe", note.read_text(encoding="utf-8"))
+
     def test_dangling_queue_symlink_does_not_block_other_recordings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
