@@ -11,6 +11,8 @@ By default, the project processes all of the following locally:
 - Markdown note generation
 - SQLite deduplication state
 
+Optional speaker labelling (pyannote.audio) also runs locally. Its Hugging Face token is used only to download the gated models, and it lives in `config.env` alongside the OpenRouter key.
+
 No telemetry is implemented by this project.
 
 ## Optional cloud processing

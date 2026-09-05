@@ -99,6 +99,19 @@ $PYTHON $APP/bin/sessions.py rebuild --date 2026-09-05   # forget and regenerate
 
 To change the prompt, copy `prompts/session-summary.md` somewhere, edit it (keep the `{subject}` placeholder), and point `SESSION_PROMPT_FILE` at it.
 
+## Speaker labels (optional)
+
+Speaker labels turn `**[0:12:03]** text` into `**[0:12:03] Speaker 2:** text` and give the summaries a much better sense of who said what. They use [pyannote.audio](https://github.com/pyannote/pyannote-audio), which runs locally but is a large install (PyTorch) and slow on CPU, so it is off by default.
+
+1. Install the extra dependencies: `./install.sh --with-diarization` (safe to re-run on an existing installation).
+2. On huggingface.co, accept the terms of `pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0`, then create a read token under Settings.
+3. In `config.env` set `DIARIZATION=1` and `HF_TOKEN="hf_..."`. `DIARIZATION_MIN_SPEAKERS` and `DIARIZATION_MAX_SPEAKERS` are optional hints when you know how many people were in the room.
+4. Run the doctor. It checks the token and the package.
+
+Each transcript segment takes the speaker who overlaps it most; segments nobody overlaps stay unlabelled rather than guessed. Labels are `Speaker 1`, `Speaker 2`, ... in order of first appearance, and they appear in the note, the JSON sidecar, the plain-text file, the session note, and the text sent for summaries. If labelling fails (missing terms acceptance, bad token, out of memory), the recording is still transcribed and the log says why.
+
+The first run downloads the pyannote models into the Hugging Face cache. Expect a one-hour recording to take a similar order of time to label as to transcribe on a CPU.
+
 ## Manage model caches
 
 Run cache commands with the installed virtual environment:

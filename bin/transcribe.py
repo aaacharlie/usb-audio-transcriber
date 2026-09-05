@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import diarize
 import notify
 from llm import call_llm, split_windows
 from model_profiles import artifact_path, artifacts_complete, profiles_for_config
@@ -29,6 +30,12 @@ OR_KEY = CFG.get("OPENROUTER_API_KEY", "").strip()
 OR_MODEL = CFG.get("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5")
 FILE_SUMMARY = CFG.get("FILE_SUMMARY", "1").strip() == "1"
 WINDOW = int(CFG.get("MAP_WINDOW_CHARS", "80000"))
+DIARIZE = CFG.get("DIARIZATION", "0").strip() == "1"
+HF_TOKEN = CFG.get("HF_TOKEN", "").strip()
+DIARIZATION_MODEL = CFG.get("DIARIZATION_MODEL", "").strip() or diarize.DEFAULT_MODEL
+DIARIZATION_MIN = CFG.get("DIARIZATION_MIN_SPEAKERS", "").strip()
+DIARIZATION_MAX = CFG.get("DIARIZATION_MAX_SPEAKERS", "").strip()
+DIARIZER = None
 SECTIONS = (
     "## Summary\nA short paragraph.\n\n"
     "## Topics\nBullet list of distinct topics or conversations.\n\n"
@@ -86,6 +93,24 @@ def summarize(transcript):
         return None
 
 
+def label_speakers(audio, segments):
+    """Attach speaker labels when enabled; a failure never blocks transcription."""
+    global DIARIZER
+    if not DIARIZE or not segments:
+        return segments
+    try:
+        if DIARIZER is None:
+            log(f"Loading diarization pipeline '{DIARIZATION_MODEL}' ...")
+            DIARIZER = diarize.load_pipeline(DIARIZATION_MODEL, HF_TOKEN)
+        turns = diarize.diarize(DIARIZER, audio, DIARIZATION_MIN, DIARIZATION_MAX)
+        labelled = diarize.assign_speakers(segments, turns)
+        log(f"  speakers found: {len(diarize.speaker_names(labelled))}")
+        return labelled
+    except Exception as exc:
+        log(f"  speaker labelling failed ({exc}) - continuing without speakers")
+        return segments
+
+
 def write_note(audio, segments, duration, summary_md, profile, comparison=False,
                status="complete"):
     timestamp = datetime.fromtimestamp(audio.stat().st_mtime)
@@ -100,21 +125,27 @@ def write_note(audio, segments, duration, summary_md, profile, comparison=False,
         )
         number += 1
     speech = sum(segment["end"] - segment["start"] for segment in segments)
+    speakers = diarize.speaker_names(segments)
     lines = ["---", f"date: {timestamp:%Y-%m-%d}", f"time: {timestamp:%H:%M}",
              "type: transcript", "source: recorder", f"audio: {audio}",
              f"duration_min: {round(duration / 60, 1)}",
              f"speech_min: {round(speech / 60, 1)}", f"model: {profile.model_id}",
              f"model_profile: {profile.key}",
-             f"transcription_status: {status}",
-             "tags: [transcript, inbox]", "---", "",
-             f"# {timestamp:%A, %B %d %Y} - {timestamp:%H:%M}", ""]
+             f"transcription_status: {status}"]
+    if speakers:
+        lines.append(f"speakers: {len(speakers)}")
+    lines += ["tags: [transcript, inbox]", "---", "",
+              f"# {timestamp:%A, %B %d %Y} - {timestamp:%H:%M}", ""]
     if summary_md:
         lines += [summary_md, "", "---", ""]
     if status == "no_speech":
         lines += ["> No speech was detected in this recording.", ""]
     lines += ["## Transcript", ""]
     for segment in segments:
-        lines.extend([f"**[{hhmmss(segment['start'])}]** {segment['text'].strip()}", ""])
+        speaker = segment.get("speaker")
+        label = f" {speaker}:" if speaker else ""
+        lines.extend([f"**[{hhmmss(segment['start'])}]{label}** {segment['text'].strip()}",
+                      ""])
     write_private_text(note, "\n".join(lines))
     return note
 
@@ -192,6 +223,12 @@ def main():
                                        current_file=audio.name, current_percent=file_percent,
                                        eta_seconds=eta)
                         last_update = now
+                if segments and DIARIZE:
+                    write_progress(active=True, phase="Labelling speakers",
+                                   total_files=total_work, files_completed=completed,
+                                   current_file=audio.name, current_percent=99,
+                                   eta_seconds=None)
+                    segments = label_speakers(audio, segments)
                 if not segments:
                     write_private_text(
                         artifact_path(audio, profile, ".json", comparison),
@@ -218,7 +255,7 @@ def main():
                     json.dumps({"duration": info.duration, "model": profile.model_id,
                                 "profile": profile.key, "segments": segments}, indent=2),
                 )
-                full_text = " ".join(segment["text"].strip() for segment in segments)
+                full_text = diarize.plain_text(segments)
                 write_private_text(
                     artifact_path(audio, profile, ".txt", comparison), full_text
                 )

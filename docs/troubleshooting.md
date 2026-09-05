@@ -91,6 +91,12 @@ Check free disk space and network access. For GPU configurations, verify that th
 - Recordings farther apart than `SESSION_GAP_MIN` become separate sessions on purpose. A recording that arrives after its session was written starts a new session; `sessions.py rebuild --date YYYY-MM-DD` regroups the whole day.
 - A note without a summary means no key, `SESSION_SUMMARY=0`, or a failed request (the note says which). After fixing the cause, run `sessions.py retry`.
 
+## Speaker labels are missing
+
+- `DIARIZATION=1` needs `./install.sh --with-diarization` and a Hugging Face token whose account accepted the terms of both `pyannote/speaker-diarization-3.1` and `pyannote/segmentation-3.0`. The doctor checks the package and the token; the log line `speaker labelling failed` names the actual error.
+- A pipeline that loads as `None` means the model terms were not accepted for that token.
+- Labelling is slow on CPU and needs memory on top of the Whisper model; the recording is still transcribed if it fails.
+
 ## OpenRouter summarization fails
 
 Transcription should still be written; the log records the summarization failure. Verify the key, model ID, account availability, and network access. Clear `OPENROUTER_API_KEY` to restore local-only operation.

@@ -54,6 +54,7 @@ Changes should preserve these properties:
 - leave transcript output available when optional summarization fails
 - resume multi-profile work without redoing durable completed artifacts
 - load only one Whisper model at a time
+- keep speaker labelling optional and non-blocking: a diarization failure still produces a transcript
 - keep `config.env`, runtime data, audio, and generated transcripts untracked
 
 ## Submitting changes

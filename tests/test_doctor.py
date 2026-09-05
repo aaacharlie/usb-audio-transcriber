@@ -219,6 +219,52 @@ class DoctorSessionTests(unittest.TestCase):
         self.assertEqual(doctor.check_config(self.base_config(SESSION_PROMPT_FILE="")), [])
 
 
+class DoctorDiarizationTests(unittest.TestCase):
+    def base_config(self, **extra):
+        return {
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            **extra,
+        }
+
+    def test_enabling_diarization_requires_a_token_and_sane_bounds(self):
+        failures = doctor.check_config(self.base_config(
+            DIARIZATION="1", DIARIZATION_MAX_SPEAKERS="many",
+        ))
+
+        self.assertTrue(any(f.startswith("HF_TOKEN is required") for f in failures))
+        self.assertIn("DIARIZATION_MAX_SPEAKERS must be a positive integer or empty", failures)
+
+    def test_diarization_off_needs_nothing(self):
+        self.assertEqual(doctor.check_config(self.base_config(DIARIZATION="0")), [])
+
+    def test_main_requires_pyannote_when_diarization_is_on(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.env"
+            config_path.write_text(
+                f'ARCHIVE_DIR="{directory}/archive"\n'
+                f'QUEUE_DIR="{directory}/queue"\n'
+                f'STATE_DB="{directory}/state/seen.sqlite"\n'
+                f'VAULT_DIR="{directory}/transcripts"\n'
+                'AUDIO_EXTS="wav"\nDIARIZATION=1\nHF_TOKEN="hf_x"\n',
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with mock.patch("shutil.which", return_value="/usr/bin/tool"), \
+                    mock.patch(
+                        "importlib.util.find_spec",
+                        side_effect=lambda name: None if name == "pyannote.audio" else object(),
+                    ), \
+                    mock.patch("sys.stdout", output):
+                result = doctor.main(["--config", str(config_path), "--skip-systemd"])
+
+            self.assertEqual(result, 1)
+            self.assertIn("pyannote.audio not importable", output.getvalue())
+
+
 class DoctorPathTests(unittest.TestCase):
     def test_writable_parent_checks_dotted_directories_themselves(self):
         with tempfile.TemporaryDirectory() as directory:

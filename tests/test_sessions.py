@@ -81,7 +81,7 @@ class Fixture:
         return audio
 
     def finish(self, audio, end, minutes, text="Hello there.", profile="fast",
-               comparison=False, status="complete"):
+               comparison=False, status="complete", speaker=None):
         """Write the sidecars, note, and completion marker for one pass."""
         suffix = f".{profile}" if comparison else ""
         duration = minutes * 60
@@ -89,6 +89,9 @@ class Fixture:
             {"start": 0.0, "end": 5.0, "text": f" {text}"},
             {"start": 10.0, "end": float(duration), "text": " More."},
         ]
+        if speaker:
+            for segment in segments:
+                segment["speaker"] = speaker
         (self.archive / f"{audio.name}{suffix}.json").write_text(json.dumps({
             "duration": duration, "model": "m", "profile": profile,
             "status": status, "segments": segments,
@@ -218,6 +221,18 @@ class GroupingTests(unittest.TestCase):
             self.assertIn("accurate words", body)
             self.assertNotIn("fast words", body)
             self.assertIn("[[2026-09-05 0930 transcript accurate]]", body)
+
+    def test_speaker_labels_are_kept_in_the_combined_transcript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key")
+            fixture.recording(at(9, 30), 30, speaker="Speaker 1")
+            sessions = load_sessions(fixture.config)
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nOk.") as llm:
+                written = fixture.run(sessions)
+
+            self.assertIn("**[0:00:00] Speaker 1:** Hello there.",
+                          written[0].read_text(encoding="utf-8"))
+            self.assertIn("[0:00:00] Speaker 1: Hello there.", llm.call_args.args[0])
 
     def test_no_speech_recordings_are_listed_without_segments(self):
         with tempfile.TemporaryDirectory() as directory:

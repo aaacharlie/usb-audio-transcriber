@@ -261,7 +261,7 @@ def render_note(members, summary_md, summary_status, ident):
         for segment in member["segments"]:
             speaker = segment.get("speaker")
             label = f" {speaker}:" if speaker else ""
-            lines += [f"**[{hhmmss(segment['start'])}]**{label} "
+            lines += [f"**[{hhmmss(segment['start'])}]{label}** "
                       f"{segment['text'].strip()}", ""]
     return "\n".join(lines)
 

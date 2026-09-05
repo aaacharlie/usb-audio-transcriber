@@ -38,6 +38,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 | `bin/transcribe.py` | Load configured faster-whisper model profiles, transcribe queued recordings, optionally summarize, and write notes |
 | `bin/sessions.py` | Group completed recordings into sessions by time gap, write session notes with wikilinks and a combined transcript, and optionally summarize the session |
 | `bin/llm.py` | Shared OpenRouter client and text windowing used by per-file and session summaries |
+| `bin/diarize.py` | Optional pyannote speaker labelling: decode with ffmpeg, diarize, assign the best-overlapping speaker to each segment |
 | `prompts/session-summary.md` | Default session summary prompt; `{subject}` is filled from `SESSION_SUBJECT` |
 | `bin/progress-popup.py` | Read the atomic progress file and present file/model progress and ETA through Zenity |
 | `bin/notify.py` | Send desktop notifications when notes are ready or a run fails; a detached helper waits for the click and opens the note |

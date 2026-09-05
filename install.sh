@@ -6,6 +6,17 @@ SOURCE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/$APP_NAME"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
+WITH_DIARIZATION=0
+RUN_SETUP=1
+for arg in "$@"; do
+  case "$arg" in
+    --with-diarization) WITH_DIARIZATION=1 ;;
+    --no-setup) RUN_SETUP=0 ;;
+    -h|--help) echo "usage: ./install.sh [--with-diarization] [--no-setup]"; exit 0 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
+
 command -v python3 >/dev/null || { echo "python3 is required" >&2; exit 1; }
 python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' || {
   echo "Python 3.10 or newer is required" >&2
@@ -25,6 +36,9 @@ mkdir -p "$INSTALL_ROOT" "$UNIT_DIR"
 python3 -m venv "$INSTALL_ROOT/venv"
 "$INSTALL_ROOT/venv/bin/pip" install --upgrade pip
 "$INSTALL_ROOT/venv/bin/pip" install -r "$SOURCE_ROOT/requirements.txt"
+if [ "$WITH_DIARIZATION" = 1 ]; then
+  "$INSTALL_ROOT/venv/bin/pip" install -r "$SOURCE_ROOT/requirements-diarization.txt"
+fi
 
 if [ ! -f "$INSTALL_ROOT/config.env" ]; then
   cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.env"
@@ -39,6 +53,7 @@ for directory in bin systemd prompts; do
   cp -a "$SOURCE_ROOT/$directory" "$INSTALL_ROOT/$directory"
 done
 cp "$SOURCE_ROOT/requirements.txt" "$INSTALL_ROOT/requirements.txt"
+cp "$SOURCE_ROOT/requirements-diarization.txt" "$INSTALL_ROOT/requirements-diarization.txt"
 cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py" \

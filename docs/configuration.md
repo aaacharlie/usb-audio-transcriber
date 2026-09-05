@@ -56,6 +56,18 @@ Keep `PURGE_DEVICE=0` unless device cleanup is intentional. A matching file is s
 
 The stock CPU configuration is deliberately conservative. GPU users must select a compatible device and compute type for their local CTranslate2 installation.
 
+## Speaker labels
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `DIARIZATION` | `0` | Set to `1` to label speakers with pyannote.audio (needs `./install.sh --with-diarization`) |
+| `HF_TOKEN` | empty | Hugging Face read token; required when `DIARIZATION=1` because the models are gated |
+| `DIARIZATION_MODEL` | `pyannote/speaker-diarization-3.1` | pyannote pipeline identifier |
+| `DIARIZATION_MIN_SPEAKERS` | empty | Optional lower bound on the number of speakers |
+| `DIARIZATION_MAX_SPEAKERS` | empty | Optional upper bound on the number of speakers |
+
+Diarization runs locally; the token is used only to download the gated models. Keep it in `config.env` like the OpenRouter key.
+
 ## Desktop integration
 
 | Setting | Default | Meaning |

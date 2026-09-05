@@ -45,7 +45,7 @@ def check_config(config):
     except ValueError as exc:
         failures.append(f"invalid WHISPER_MODEL_PROFILE: {exc}")
     for name in ("PURGE_DEVICE", "VAD_ENABLED", "SESSION_NOTES", "SESSION_SUMMARY",
-                 "FILE_SUMMARY"):
+                 "FILE_SUMMARY", "DIARIZATION"):
         if config.get(name, "0").strip() not in {"0", "1"}:
             failures.append(f"{name} must be 0 or 1")
     for name in ("HEADLESS", "NOTIFY"):
@@ -62,6 +62,20 @@ def check_config(config):
             valid = False
         if not valid:
             failures.append(f"{name} must be a positive integer")
+    if config.get("DIARIZATION", "0").strip() == "1" and not config.get("HF_TOKEN", "").strip():
+        failures.append(
+            "HF_TOKEN is required when DIARIZATION=1 (pyannote models are gated on "
+            "Hugging Face)"
+        )
+    for name in ("DIARIZATION_MIN_SPEAKERS", "DIARIZATION_MAX_SPEAKERS"):
+        value = config.get(name, "").strip()
+        if value:
+            try:
+                valid = int(value) > 0
+            except ValueError:
+                valid = False
+            if not valid:
+                failures.append(f"{name} must be a positive integer or empty")
     prompt_file = config.get("SESSION_PROMPT_FILE", "").strip()
     if prompt_file and not Path(prompt_file).expanduser().is_file():
         failures.append(f"SESSION_PROMPT_FILE is not a readable file: {prompt_file}")
@@ -183,6 +197,18 @@ def main(argv=None):
             print(f"OK  Python package: {package}")
         else:
             failures.append(f"Python package: {package} not importable")
+    if config.get("DIARIZATION", "0").strip() == "1":
+        try:
+            found = importlib.util.find_spec("pyannote.audio") is not None
+        except (ImportError, ValueError):
+            found = False
+        if found:
+            print("OK  Python package: pyannote.audio")
+        else:
+            failures.append(
+                "Python package: pyannote.audio not importable "
+                "(run ./install.sh --with-diarization)"
+            )
 
     if config:
         warnings.extend(check_watch_dirs(config))
