@@ -78,17 +78,41 @@ Diarization runs locally; the token is used only to download the gated models. K
 
 Headless machines also need `loginctl enable-linger "$USER"` so the user timer keeps running without a login session; the doctor warns when lingering is off.
 
-## Optional summarization
+## AI summaries
+
+Transcription is always local. Summaries are optional, and `SUMMARY_BACKEND` decides how they are made:
+
+| Backend | What it uses | Cost |
+| --- | --- | --- |
+| `none` | nothing; notes get the combined transcript only | free |
+| `command` | a command-line AI tool you already have: Codex with a ChatGPT plan, Claude Code, Gemini CLI, or your own agent | covered by the subscription |
+| `openai` | any OpenAI-compatible server, normally Ollama on this machine | free, runs locally |
+| `openrouter` | OpenRouter | pay per use |
+
+An empty `SUMMARY_BACKEND` means `openrouter` when `OPENROUTER_API_KEY` is set and `none` otherwise, so older configurations behave exactly as before. The setup wizard asks this question and can be re-run at any time; `sessions.py test-backend` sends a one-word prompt through the configured backend and prints what came back.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | empty | Enables OpenRouter only when populated |
+| `SUMMARY_BACKEND` | empty | `none`, `command`, `openai`, or `openrouter` |
+| `SUMMARY_COMMAND` | empty | Command for the `command` backend; the prompt arrives on stdin, the reply is read from stdout or from `{output_file}` when the command mentions it, and `{prompt_file}` holds the prompt for tools that want it as an argument |
+| `SUMMARY_COMMAND_TIMEOUT` | `900` | Seconds to wait for the command |
+| `LLM_BASE_URL` | `http://127.0.0.1:11434/v1` | OpenAI-compatible server for the `openai` backend (Ollama's default) |
+| `LLM_MODEL` | empty | Model name for the `openai` backend, for example `llama3.1:8b` |
+| `LLM_API_KEY` | empty | Optional key for the `openai` backend; Ollama needs none |
+| `OPENROUTER_API_KEY` | empty | Key for the `openrouter` backend |
 | `OPENROUTER_MODEL` | `anthropic/claude-haiku-4.5` | OpenRouter model identifier |
 | `MAP_WINDOW_CHARS` | `80000` | Character window used before map-reduce summarization |
+| `FILE_SUMMARY` | `1` | Per-recording summary block at the top of each transcript note |
 
-| `FILE_SUMMARY` | `1` | Per-recording summary block at the top of each transcript note when a key is set |
+Command recipes, taken from each tool's documentation; confirm with `sessions.py test-backend` and use full paths if the tool is not on the background service's `PATH`:
 
-With no API key, transcription and note generation remain local. With a key, transcript text is sent to OpenRouter; audio is not sent by this project. Do not commit `config.env`.
+```ini
+SUMMARY_COMMAND="codex exec --skip-git-repo-check --sandbox read-only --output-last-message {output_file}"
+SUMMARY_COMMAND="claude -p --output-format text"
+SUMMARY_COMMAND="gemini -p \"$(cat {prompt_file})\""
+```
+
+The command runs through `bash -c` with the prompt on standard input, in a temporary directory, with the timeout above. Whatever the tool does with the text is between you and that provider; see the privacy page.
 
 ## Session notes
 
@@ -97,12 +121,12 @@ With no API key, transcription and note generation remain local. With a key, tra
 | `SESSION_NOTES` | `1` | Write one note per session after each cycle |
 | `SESSION_GAP_MIN` | `20` | Recordings separated by a longer silence start a new session |
 | `SESSION_BACKFILL_DAYS` | `7` | Sessions that ended more than this many days ago get a note without an automatic AI summary; `sessions.py retry` summarizes them on demand; empty summarizes everything |
-| `SESSION_SUMMARY` | `1` | Add an AI summary to session notes when `OPENROUTER_API_KEY` is set |
-| `SESSION_SUMMARY_MODEL` | empty | OpenRouter model for session summaries; empty means `OPENROUTER_MODEL` |
+| `SESSION_SUMMARY` | `1` | Add an AI summary to session notes when a summary backend is configured |
+| `SESSION_SUMMARY_MODEL` | empty | Model for session summaries on the `openrouter` and `openai` backends; empty means the backend's usual model |
 | `SESSION_SUBJECT` | empty | Subject matter inserted into the summary prompt |
 | `SESSION_PROMPT_FILE` | empty | Custom prompt template containing `{subject}`; empty uses `prompts/session-summary.md` |
 
-Session notes work without any key: the combined transcript and the wikilinks need no network. Only the summary uses OpenRouter, and it sends the combined transcript text of the whole session.
+Session notes work without any backend: the combined transcript and the wikilinks need no network. Only the summary uses the backend, and it sends the combined transcript text of the whole session.
 
 ## Applying changes
 

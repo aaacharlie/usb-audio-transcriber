@@ -103,6 +103,12 @@ Check free disk space and network access. For GPU configurations, verify that th
 - A pipeline that loads as `None` means the model terms were not accepted for that token.
 - Labelling is slow on CPU and needs memory on top of the Whisper model; the recording is still transcribed if it fails.
 
+## AI summaries fail
+
+- Run `sessions.py test-backend`. It sends a one-word prompt through the configured backend and prints the reply or the error.
+- `command` backend: the command runs through `bash -c` under the background service, whose `PATH` may not include tools installed in your home folder; use the full path (`which codex` in a terminal shows it). The tool must be signed in already; the log line `session summary failed` carries the last line of its error output. Raise `SUMMARY_COMMAND_TIMEOUT` for slow tools.
+- `openai` backend: check that the server is running (`ollama list`) and that `LLM_MODEL` names a pulled model.
+
 ## OpenRouter summarization fails
 
 Transcription should still be written; the log records the summarization failure. Verify the key, model ID, account availability, and network access. Clear `OPENROUTER_API_KEY` to restore local-only operation.

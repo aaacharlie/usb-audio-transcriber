@@ -24,6 +24,15 @@ OBSIDIAN_CONFIGS = (
     "snap/obsidian/current/.config/obsidian/obsidian.json",           # Snap
 )
 DEFAULT_FOLDER = "Recordings"
+BACKEND_CHOICES = (
+    ("none", "Skip for now: everything stays local (change this any time)"),
+    ("command", "A command-line AI tool I already pay for (Codex, Claude Code, Gemini CLI, ...)"),
+    ("openai", "A local model through Ollama (free and private)"),
+    ("openrouter", "OpenRouter (pay per use, needs an API key)"),
+)
+DEFAULT_COMMAND = "codex exec --skip-git-repo-check --sandbox read-only --output-last-message {output_file}"
+DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
+DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434/v1"
 SEARCH_DEPTH = 4
 SKIP_DIRS = {"node_modules", "snap", "venv", ".venv", "Trash"}
 OTHER = "Somewhere else (type a path)"
@@ -196,20 +205,76 @@ def run(ui, config_path, home=None):
     )
     if subject is not None:
         updates["SESSION_SUBJECT"] = subject.strip()
-    if not config.get("OPENROUTER_API_KEY", "").strip():
-        key = ui.secret(
-            "OpenRouter API key for AI summaries. Leave empty to keep everything local"
-        )
-        if key:
-            updates["OPENROUTER_API_KEY"] = key.strip()
+    backend_updates, summary_line = ask_summary_backend(ui, config)
+    if backend_updates is None:
+        return False
+    updates.update(backend_updates)
     write_config(config_path, updates)
-    summary_line = ("AI summaries: on" if updates.get("OPENROUTER_API_KEY")
-                    or config.get("OPENROUTER_API_KEY", "").strip()
-                    else "AI summaries: off (local only)")
     ui.info(f"Notes will be written to:\n{vault_dir}\n{summary_line}\n\n"
             "Plug in your recorder to start. Settings live in "
             f"{Path(config_path)}.")
     return True
+
+
+def current_backend(config):
+    """The backend a configuration already uses, following the empty-means rule."""
+    choice = config.get("SUMMARY_BACKEND", "").strip().lower()
+    if choice:
+        return choice
+    return "openrouter" if config.get("OPENROUTER_API_KEY", "").strip() else "none"
+
+
+def ask_summary_backend(ui, config):
+    """Ask how summaries should be made. Returns (updates, summary line), or
+    (None, None) when the user cancelled."""
+    current = current_backend(config)
+    keys = [key for key, _label in BACKEND_CHOICES]
+    options = [label for _key, label in BACKEND_CHOICES]
+    if current != "none":
+        keys = ["keep"] + keys
+        options = [f"Keep the current setting ({current})"] + options
+    picked = ui.choose(
+        "How should AI summaries be made?",
+        "Transcription is always local. Summaries are optional and can use a tool you "
+        "already have. You can change this later with setup.py.",
+        options,
+    )
+    if picked is None:
+        return None, None
+    choice = keys[picked]
+    if choice == "keep":
+        return {}, f"AI summaries: {current}"
+    updates = {"SUMMARY_BACKEND": choice}
+    if choice == "command":
+        command = ui.ask(
+            "Command that reads the prompt on stdin and prints the summary",
+            config.get("SUMMARY_COMMAND", "").strip() or DEFAULT_COMMAND,
+        )
+        if command is None:
+            return None, None
+        updates["SUMMARY_COMMAND"] = command.strip()
+    elif choice == "openai":
+        model = ui.ask(
+            "Ollama model name (pull it first with: ollama pull <model>)",
+            config.get("LLM_MODEL", "").strip() or DEFAULT_OLLAMA_MODEL,
+        )
+        if model is None:
+            return None, None
+        updates["LLM_MODEL"] = model.strip()
+        if not config.get("LLM_BASE_URL", "").strip():
+            updates["LLM_BASE_URL"] = DEFAULT_OLLAMA_URL
+    elif choice == "openrouter" and not config.get("OPENROUTER_API_KEY", "").strip():
+        key = ui.secret("OpenRouter API key (leave empty to skip summaries for now)")
+        if key is None:
+            return None, None
+        if key.strip():
+            updates["OPENROUTER_API_KEY"] = key.strip()
+        else:
+            updates["SUMMARY_BACKEND"] = "none"
+            choice = "none"
+    line = ("AI summaries: off (local only)" if choice == "none"
+            else f"AI summaries: {choice}. Test with: sessions.py test-backend")
+    return updates, line
 
 
 def pick_ui(force_terminal=False):

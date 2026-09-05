@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import notify
-from llm import call_llm, split_windows
+from llm import backend_from_config, split_windows
 from model_profiles import artifact_path, artifacts_complete, profiles_for_config
 from pipeline_config import ROOT, load, log, sync_directory
 
@@ -31,20 +31,25 @@ GAP = timedelta(minutes=int(CFG.get("SESSION_GAP_MIN", "20") or 20))
 # days ago get a note but no automatic AI summary (empty = summarize all).
 BACKFILL_DAYS = CFG.get("SESSION_BACKFILL_DAYS", "7").strip()
 BACKFILL = timedelta(days=int(BACKFILL_DAYS)) if BACKFILL_DAYS else None
-OR_KEY = CFG.get("OPENROUTER_API_KEY", "").strip()
-SUMMARY_MODEL = (CFG.get("SESSION_SUMMARY_MODEL", "").strip()
-                 or CFG.get("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5"))
-SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and bool(OR_KEY)
+BACKEND = backend_from_config(
+    CFG, model_override=CFG.get("SESSION_SUMMARY_MODEL", "").strip() or None)
+SUMMARY_MODEL = BACKEND.describe() if BACKEND else "none"
+SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and BACKEND is not None
 SUBJECT = CFG.get("SESSION_SUBJECT", "").strip() or "the subject matter of these recordings"
 PROMPT_FILE = Path(CFG.get("SESSION_PROMPT_FILE", "").strip()
                    or ROOT / "prompts" / "session-summary.md")
 WINDOW = int(CFG.get("MAP_WINDOW_CHARS", "80000"))
-NO_KEY_HINT = (
-    "> No AI summary was generated because OPENROUTER_API_KEY is not set. "
+NO_BACKEND_HINT = (
+    "> No AI summary was generated because no summary backend is configured. "
     "Paste the combined transcript below into an AI model together with the "
-    "prompt in prompts/session-summary.md, or set the key to have it done "
-    "automatically."
+    "prompt in prompts/session-summary.md, or run setup.py (or set "
+    "SUMMARY_BACKEND in config.env) to have it done automatically."
 )
+
+
+def call_llm(prompt, max_tokens=2000):
+    """Send one prompt to the configured session summary backend."""
+    return BACKEND.complete(prompt, max_tokens=max_tokens)
 
 
 def hhmmss(seconds):
@@ -172,8 +177,7 @@ def summarize_session(text):
     """Summarize one session's transcripts; long sessions go through map-reduce."""
     template = load_template()
     if len(text) <= WINDOW:
-        return call_llm(f"{template}\n\nTRANSCRIPTS:\n\n{text}", OR_KEY, SUMMARY_MODEL,
-                        max_tokens=4000)
+        return call_llm(f"{template}\n\nTRANSCRIPTS:\n\n{text}", max_tokens=4000)
     windows = split_windows(text, WINDOW)
     log(f"  long session: map-reduce over {len(windows)} windows")
     partials = []
@@ -182,15 +186,13 @@ def summarize_session(text):
             f"This is part {number} of {len(windows)} of the transcripts from one "
             "session. Summarize this part in detail and in order, keeping names, "
             "numbers, dates, decisions, and open questions. Output Markdown bullet "
-            f"points only.\n\nPART {number}:\n{chunk}",
-            OR_KEY, SUMMARY_MODEL, max_tokens=2000))
+            f"points only.\n\nPART {number}:\n{chunk}", max_tokens=2000))
     joined = "\n\n".join(f"PART {number} NOTES:\n{partial}"
                          for number, partial in enumerate(partials, 1))
     return call_llm(
         f"{template}\n\nThe transcripts were too long to send at once, so below are "
         "detailed, in-order notes on each part instead of the raw text. Treat them "
-        f"as the transcripts.\n\nPART NOTES:\n\n{joined}",
-        OR_KEY, SUMMARY_MODEL, max_tokens=4000)
+        f"as the transcripts.\n\nPART NOTES:\n\n{joined}", max_tokens=4000)
 
 
 def write_private_text(path, text):
@@ -254,7 +256,7 @@ def render_note(members, summary_md, summary_status, ident):
                   "days before it was written (SESSION_BACKFILL_DAYS). Run "
                   "`sessions.py retry` to summarize older sessions on demand.", ""]
     else:
-        lines += [NO_KEY_HINT, ""]
+        lines += [NO_BACKEND_HINT, ""]
     lines += ["## Recordings", ""]
     for member in members:
         minutes = round(member["duration"] / 60)
@@ -275,9 +277,9 @@ def render_note(members, summary_md, summary_status, ident):
 
 
 def build_summary(members, force=False):
-    """Return (markdown, status): ok, failed, disabled, no_key, or backfill."""
-    if not OR_KEY:
-        return None, "no_key"
+    """Return (markdown, status): ok, failed, disabled, no_backend, or backfill."""
+    if BACKEND is None:
+        return None, "no_backend"
     if not SUMMARIZE:
         return None, "disabled"
     if not force and BACKFILL is not None:
@@ -370,6 +372,22 @@ def rebuild(con, date):
     return auto(con)
 
 
+def test_backend():
+    """Send a tiny prompt through the configured backend and show what came back."""
+    if BACKEND is None:
+        print("No summary backend is configured (SUMMARY_BACKEND). Summaries are off.")
+        return 1
+    print(f"Backend: {BACKEND.describe()}")
+    try:
+        reply = BACKEND.complete("Reply with exactly the word OK and nothing else.",
+                                 max_tokens=20)
+    except Exception as exc:
+        print(f"FAILED: {exc}")
+        return 1
+    print(f"Reply: {reply[:200]}")
+    return 0
+
+
 def list_sessions(con):
     rows = con.execute(
         "SELECT started_at, ended_at, members, summarized, note FROM sessions "
@@ -387,7 +405,7 @@ def list_sessions(con):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", default="auto",
-                        choices=("auto", "list", "retry", "rebuild"))
+                        choices=("auto", "list", "retry", "rebuild", "test-backend"))
     parser.add_argument("--date", help="YYYY-MM-DD, required for rebuild")
     args = parser.parse_args(argv)
     if args.command == "rebuild" and not args.date:
@@ -395,6 +413,8 @@ def main(argv=None):
     if args.command == "auto" and not ENABLED:
         log("Session notes are disabled (SESSION_NOTES=0).")
         return 0
+    if args.command == "test-backend":
+        return test_backend()
     STATE_DB.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(STATE_DB)
     try:

@@ -117,7 +117,7 @@ class WizardFlowTests(unittest.TestCase):
             vault = make_vault(home / "Notes")
             config = home / "config.env"
             config.write_text('VAULT_DIR="/default"\nOPENROUTER_API_KEY=""\n', encoding="utf-8")
-            ui = ScriptedUI(choices=[0], answers=["", "landlord meetings"], secrets=["sk-test"])
+            ui = ScriptedUI(choices=[0, 3], answers=["", "landlord meetings"], secrets=["sk-test"])
 
             self.assertTrue(wizard.run(ui, config, home))
 
@@ -125,9 +125,10 @@ class WizardFlowTests(unittest.TestCase):
             text = config.read_text(encoding="utf-8")
             self.assertIn(f'VAULT_DIR="{vault / "Recordings"}"', text)
             self.assertIn('SESSION_SUBJECT="landlord meetings"', text)
+            self.assertIn('SUMMARY_BACKEND="openrouter"', text)
             self.assertIn('OPENROUTER_API_KEY="sk-test"', text)
             self.assertEqual(ui.questions[0][2], [str(vault), wizard.OTHER])
-            self.assertIn("AI summaries: on", ui.messages[-1])
+            self.assertIn("AI summaries: openrouter", ui.messages[-1])
 
     def test_cancelling_leaves_the_configuration_untouched(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -146,7 +147,7 @@ class WizardFlowTests(unittest.TestCase):
             home = Path(directory)
             config = home / "config.env"
             config.write_text('VAULT_DIR="/default"\nOPENROUTER_API_KEY="keep"\n', encoding="utf-8")
-            ui = ScriptedUI(answers=[str(home / "Transcripts"), ""])
+            ui = ScriptedUI(choices=[0], answers=[str(home / "Transcripts"), ""])
 
             self.assertTrue(wizard.run(ui, config, home))
 
@@ -154,7 +155,47 @@ class WizardFlowTests(unittest.TestCase):
             text = config.read_text(encoding="utf-8")
             self.assertIn(f'VAULT_DIR="{home / "Transcripts"}"', text)
             self.assertIn('OPENROUTER_API_KEY="keep"', text)
+            self.assertNotIn("SUMMARY_BACKEND", text)
             self.assertFalse(any(q[0] == "secret" for q in ui.questions))
+            backend_question = [q for q in ui.questions if q[0] == "choose"][0]
+            self.assertTrue(backend_question[2][0].startswith("Keep the current setting (openrouter)"))
+
+    def test_subscription_tool_and_ollama_choices_write_their_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            config = home / "config.env"
+            config.write_text('VAULT_DIR="/default"\n', encoding="utf-8")
+            ui = ScriptedUI(choices=[1], answers=[str(home / "T"), "", ""])
+            self.assertTrue(wizard.run(ui, config, home))
+            text = config.read_text(encoding="utf-8")
+            self.assertIn('SUMMARY_BACKEND="command"', text)
+            self.assertIn(f'SUMMARY_COMMAND="{wizard.DEFAULT_COMMAND}"', text)
+            self.assertIn("test-backend", ui.messages[-1])
+
+            config.write_text('VAULT_DIR="/default"\n', encoding="utf-8")
+            ui = ScriptedUI(choices=[2], answers=[str(home / "T"), "", "mistral:7b"])
+            self.assertTrue(wizard.run(ui, config, home))
+            text = config.read_text(encoding="utf-8")
+            self.assertIn('SUMMARY_BACKEND="openai"', text)
+            self.assertIn('LLM_MODEL="mistral:7b"', text)
+            self.assertIn(f'LLM_BASE_URL="{wizard.DEFAULT_OLLAMA_URL}"', text)
+
+    def test_skipping_or_declining_a_key_leaves_summaries_off(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            config = home / "config.env"
+            config.write_text('VAULT_DIR="/default"\n', encoding="utf-8")
+            ui = ScriptedUI(choices=[0], answers=[str(home / "T"), ""])
+            self.assertTrue(wizard.run(ui, config, home))
+            self.assertIn('SUMMARY_BACKEND="none"', config.read_text(encoding="utf-8"))
+            self.assertIn("off (local only)", ui.messages[-1])
+
+            config.write_text('VAULT_DIR="/default"\n', encoding="utf-8")
+            ui = ScriptedUI(choices=[3], answers=[str(home / "T"), ""], secrets=[""])
+            self.assertTrue(wizard.run(ui, config, home))
+            text = config.read_text(encoding="utf-8")
+            self.assertIn('SUMMARY_BACKEND="none"', text)
+            self.assertNotIn("OPENROUTER_API_KEY", text)
 
     def test_relative_paths_are_rejected_without_changes(self):
         with tempfile.TemporaryDirectory() as directory:
