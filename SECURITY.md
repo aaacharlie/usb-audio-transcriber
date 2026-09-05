@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Security fixes are applied to the current `main` branch. The project does not currently publish versioned releases with separate support windows.
+Security fixes are applied to the current `main` branch and included in the next tagged release. Only the latest release and `main` are supported; there are no separate support windows for older versions.
 
 ## Reporting a vulnerability
 

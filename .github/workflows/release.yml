@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, for example 1.0.0. Creates tag v<version> on main."
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Refuse to release from a branch other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "Run the Release workflow from the main branch." >&2
+          exit 1
+      - name: Resolve the version
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${INPUT_VERSION#v}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Run the checks
+        run: |
+          python -m py_compile bin/*.py
+          bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh
+          python -m unittest discover -s tests
+      - name: Extract the release notes from CHANGELOG.md
+        run: python .github/release-notes.py "${{ steps.meta.outputs.version }}" > release-notes.md
+      - name: Create the tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.meta.outputs.version }}" -m "v${{ steps.meta.outputs.version }}"
+          git push origin "v${{ steps.meta.outputs.version }}"
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.meta.outputs.version }}" \
+            --title "v${{ steps.meta.outputs.version }}" \
+            --notes-file release-notes.md

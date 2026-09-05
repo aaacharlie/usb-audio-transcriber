@@ -58,6 +58,12 @@ Changes should preserve these properties:
 - keep speaker labelling optional and non-blocking: a diarization failure still produces a transcript
 - keep `config.env`, runtime data, audio, and generated transcripts untracked
 
+## Releases
+
+1. Update `CHANGELOG.md`: give the top section the new version number and date.
+2. Merge to `main`.
+3. On GitHub open Actions, choose the Release workflow, click "Run workflow", and enter the version (for example `1.0.0`). The workflow runs the checks, tags `v1.0.0` on `main`, and publishes a GitHub release whose notes are that changelog section. Pushing a `v*` tag by hand publishes the release the same way.
+
 ## Submitting changes
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md). Add or update tests for behavior changes and describe any real-audio validation separately from deterministic automated tests.

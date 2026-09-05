@@ -17,7 +17,8 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 ## Diagnose or contribute
 
 - [Troubleshooting](troubleshooting.md) — inspect-first checks for discovery, services, progress, models, and summarization
-- [Development guide](development.md) — repository layout, checks, design constraints, and contribution workflow
+- [Development guide](development.md) — repository layout, checks, design constraints, releases, and contribution workflow
+- [Changelog](../CHANGELOG.md) — what changed in each release
 - [Contributing](../CONTRIBUTING.md) — pull-request and testing expectations
 - [Security policy](../SECURITY.md) — private vulnerability reporting
 
