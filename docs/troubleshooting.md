@@ -25,6 +25,7 @@ The application log is:
 - Confirm the device is mounted under `/media/$USER`, `/run/media/$USER`, or `/mnt`.
 - Confirm each recording is directly inside a directory matching `RECORDER_DIR` exactly.
 - Confirm its extension is listed in `AUDIO_EXTS`.
+- For `WATCH_DIRS`, confirm each entry is an absolute path and the folder exists. Hidden files and folders and symlinks are skipped there.
 - Files smaller than 4097 bytes are ignored.
 - A file whose size changes during the stability check is deferred to a later cycle.
 - Check permissions with `namei -l /path/to/recording` without changing them blindly.

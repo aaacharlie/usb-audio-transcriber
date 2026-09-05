@@ -24,7 +24,7 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 
 The documentation and implementation are organized around these guarantees:
 
-1. USB source files are not deleted by default.
+1. USB source files are not deleted by default, and watched-folder sources are never deleted.
 2. Imported copies are verified by SHA-256 before entering the queue.
 3. Duplicate content is not re-imported under a different filename.
 4. Transcription is local unless OpenRouter text summarization is explicitly enabled.

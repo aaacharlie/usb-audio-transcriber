@@ -90,6 +90,45 @@ class DoctorConfigTests(unittest.TestCase):
         self.assertIn("MAP_WINDOW_CHARS must be a positive integer", failures)
 
 
+class DoctorWatchDirTests(unittest.TestCase):
+    def base_config(self, **extra):
+        return {
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            **extra,
+        }
+
+    def test_check_config_rejects_relative_watch_dirs(self):
+        failures = doctor.check_config(self.base_config(WATCH_DIRS="Sync/Memos:/srv/audio"))
+
+        self.assertIn("WATCH_DIRS entry must be an absolute path: Sync/Memos", failures)
+        self.assertEqual(len([f for f in failures if "WATCH_DIRS" in f]), 1)
+
+    def test_check_config_rejects_watching_the_archive_itself(self):
+        failures = doctor.check_config(self.base_config(WATCH_DIRS="/archive"))
+
+        self.assertIn(
+            "WATCH_DIRS entry must not be one of the pipeline's own paths: /archive",
+            failures,
+        )
+
+    def test_missing_watch_dir_is_a_warning_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            present = Path(directory) / "present"
+            present.mkdir()
+            missing = Path(directory) / "missing"
+            config = self.base_config(WATCH_DIRS=f"{present}:{missing}")
+
+            self.assertEqual(doctor.check_config(config), [])
+            self.assertEqual(
+                doctor.check_watch_dirs(config),
+                [f"WATCH_DIRS folder is not a directory right now: {missing}"],
+            )
+
+
 class DoctorPathTests(unittest.TestCase):
     def test_writable_parent_checks_dotted_directories_themselves(self):
         with tempfile.TemporaryDirectory() as directory:

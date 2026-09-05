@@ -5,7 +5,7 @@ USB Audio Transcriber is a user-level, timer-driven pipeline. It does not requir
 ## Data flow
 
 ```text
-mounted recorder media
+mounted recorder media, WATCH_DIRS folders
         |
         v
 bin/ingest.py -- SHA-256 deduplication and verified copy
@@ -28,7 +28,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 
 | Component | Responsibility |
 | --- | --- |
-| `bin/ingest.py` | Discover recorder files, wait for stable file size, hash, archive, verify, deduplicate, and enqueue |
+| `bin/ingest.py` | Discover recorder files and watched-folder audio, wait for stable file size, hash, archive, verify, deduplicate, and enqueue |
 | `bin/transcribe.py` | Load configured faster-whisper model profiles, transcribe queued recordings, optionally summarize, and write notes |
 | `bin/progress-popup.py` | Read the atomic progress file and present file/model progress and ETA through Zenity |
 | `bin/pipeline_config.py` | Parse `config.env`, log messages, and atomically read/write progress state |
@@ -44,6 +44,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 - The database's primary key is the source digest, so renaming the same recording does not re-import it.
 - Queue entries are symlinks to archived audio; transcription does not operate on USB media.
 - `PURGE_DEVICE=0` is the default. Source deletion requires explicit configuration.
+- Sources found in `WATCH_DIRS` are never deleted, whatever `PURGE_DEVICE` says.
 - `flock` prevents overlapping timer cycles.
 - Model passes run sequentially, so `both` does not keep two models in RAM at once.
 

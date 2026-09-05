@@ -36,8 +36,11 @@ expansion and requires the four settings to name distinct locations.
 | `AUDIO_EXTS` | `mp3,wav,m4a` | Comma-separated extensions, without leading dots |
 | `RECORDER_DIR` | `RECORD` | Directory name that must directly contain a candidate recording |
 | `PURGE_DEVICE` | `0` | Set to `1` to remove a source from the recorder after verified import |
+| `WATCH_DIRS` | empty | Colon-separated extra folders scanned recursively for audio; sources found here are never deleted |
 
 Keep `PURGE_DEVICE=0` unless device cleanup is intentional. A matching file is still deduplicated by content rather than name.
+
+`WATCH_DIRS` is for recordings that arrive through a sync tool (Syncthing, Nextcloud, Dropbox), a phone export, or a network share. Hidden files and folders are skipped so partially synced files are not imported, symlinks are ignored, and the pipeline's own archive and queue are excluded. Every entry must be an absolute path after `~` expansion. A folder that does not exist yet only produces a doctor warning, so a share that is mounted later still works.
 
 ## Transcription
 

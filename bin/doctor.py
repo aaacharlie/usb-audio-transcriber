@@ -57,7 +57,35 @@ def check_config(config):
             valid = False
         if not valid:
             failures.append(f"{name} must be a positive integer")
+    for entry in watch_dirs(config):
+        if not entry.is_absolute():
+            failures.append(f"WATCH_DIRS entry must be an absolute path: {entry}")
+        elif any(
+            entry == Path(config.get(name, "")).expanduser()
+            for name in PATH_SETTINGS if config.get(name, "").strip()
+        ):
+            failures.append(
+                f"WATCH_DIRS entry must not be one of the pipeline's own paths: {entry}"
+            )
     return failures
+
+
+def watch_dirs(config):
+    """Expand the optional colon-separated WATCH_DIRS setting."""
+    return [
+        Path(os.path.expandvars(os.path.expanduser(entry.strip())))
+        for entry in config.get("WATCH_DIRS", "").split(":")
+        if entry.strip()
+    ]
+
+
+def check_watch_dirs(config):
+    """Return warnings for watch folders that are not currently available."""
+    return [
+        f"WATCH_DIRS folder is not a directory right now: {entry}"
+        for entry in watch_dirs(config)
+        if entry.is_absolute() and not entry.is_dir()
+    ]
 
 
 def writable_parent(path, is_file=False):
@@ -117,6 +145,7 @@ def main(argv=None):
             failures.append(f"Python package: {package} not importable")
 
     if config:
+        warnings.extend(check_watch_dirs(config))
         for setting in PATH_SETTINGS:
             value = config.get(setting, "").strip()
             if not value:

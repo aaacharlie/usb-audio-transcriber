@@ -11,6 +11,16 @@
 
 The pipeline scans `/media/$USER`, `/run/media/$USER`, and `/mnt`. It ignores audio outside a directory whose name exactly matches `RECORDER_DIR`.
 
+## Watch a folder instead of, or as well as, USB media
+
+Set `WATCH_DIRS` in `config.env` to one or more absolute folders separated by colons:
+
+```ini
+WATCH_DIRS="${HOME}/Sync/VoiceMemos:/srv/audio"
+```
+
+Every cycle scans those folders recursively, so phone voice memos synced with Syncthing, Nextcloud, or Dropbox, files copied over the network, or anything dropped into the folder by hand are imported exactly like recorder files: verified copy, deduplication by content, queue, transcript. Files in watched folders are never deleted, even when `PURGE_DEVICE=1`, because deleting a synced file would delete it on every device. Hidden files and folders are ignored so partially synced files are not picked up.
+
 ## Run a cycle manually
 
 ```bash

@@ -436,5 +436,99 @@ class DiscoverySafetyTests(unittest.TestCase):
             self.assertEqual(ingest.find_candidates(), [])
 
 
+class WatchDirTests(unittest.TestCase):
+    def config_for(self, root, **extra):
+        return {
+            "ARCHIVE_DIR": str(root / "archive"),
+            "QUEUE_DIR": str(root / "queue"),
+            "STATE_DB": str(root / "state" / "seen.sqlite"),
+            "AUDIO_EXTS": "wav,m4a",
+            "RECORDER_DIR": "RECORD",
+            "PURGE_DEVICE": "0",
+            **extra,
+        }
+
+    def test_watch_dirs_expand_home_in_every_entry(self):
+        with mock.patch.dict("os.environ", {"HOME": "/home/test"}):
+            ingest = load_ingest({
+                "ARCHIVE_DIR": "/archive", "QUEUE_DIR": "/queue",
+                "STATE_DB": "/state.sqlite", "AUDIO_EXTS": "wav",
+                "WATCH_DIRS": "~/Sync/Memos: /srv/audio :",
+            })
+
+        self.assertEqual(
+            ingest.WATCH_DIRS,
+            [Path("/home/test/Sync/Memos"), Path("/srv/audio")],
+        )
+
+    def test_watched_folder_audio_is_imported_recursively_but_dotfiles_are_not(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sync = root / "sync"
+            memo = sync / "Voice" / "memo.m4a"
+            memo.parent.mkdir(parents=True)
+            memo.write_bytes(b"recording" * 1024)
+            partial = sync / ".syncthing" / "partial.m4a"
+            partial.parent.mkdir()
+            partial.write_bytes(b"recording" * 1024)
+            (sync / "notes.txt").write_text("not audio" * 1024, encoding="utf-8")
+            ingest = load_ingest(self.config_for(root, WATCH_DIRS=str(sync)))
+            ingest.MOUNT_ROOTS = []
+
+            self.assertEqual(ingest.find_watch_candidates(), [memo])
+            with mock.patch.object(ingest, "stable", return_value=True):
+                self.assertEqual(ingest.main(), 0)
+
+            archived = list((root / "archive").rglob("*.m4a"))
+            self.assertEqual(len(archived), 1)
+            self.assertEqual(archived[0].read_bytes(), memo.read_bytes())
+            self.assertEqual(len(list((root / "queue").iterdir())), 1)
+            self.assertTrue(memo.exists())
+
+    def test_watched_folder_sources_are_never_purged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sync = root / "sync"
+            memo = sync / "memo.wav"
+            sync.mkdir()
+            memo.write_bytes(b"recording" * 1024)
+            ingest = load_ingest(
+                self.config_for(root, WATCH_DIRS=str(sync), PURGE_DEVICE="1")
+            )
+            ingest.MOUNT_ROOTS = []
+            with mock.patch.object(ingest, "stable", return_value=True):
+                self.assertEqual(ingest.main(), 0)
+                self.assertTrue(memo.exists(), "new import must not purge a watched source")
+                self.assertEqual(ingest.main(), 0)
+
+            self.assertTrue(memo.exists(), "duplicate pass must not purge a watched source")
+            self.assertEqual(len(list((root / "archive").rglob("*.wav"))), 1)
+
+    def test_watched_folder_ignores_symlinks_and_the_pipelines_own_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = root / "private.wav"
+            outside.write_bytes(b"private" * 1024)
+            watched = root / "watched"
+            watched.mkdir()
+            (watched / "linked.wav").symlink_to(outside)
+            archive = watched / "archive"
+            archive.mkdir()
+            (archive / "already.wav").write_bytes(b"archived" * 1024)
+            genuine = watched / "genuine.wav"
+            genuine.write_bytes(b"genuine" * 1024)
+            ingest = load_ingest({
+                "ARCHIVE_DIR": str(archive),
+                "QUEUE_DIR": str(watched / "queue"),
+                "STATE_DB": str(root / "state" / "seen.sqlite"),
+                "AUDIO_EXTS": "wav",
+                "RECORDER_DIR": "RECORD",
+                "WATCH_DIRS": str(watched),
+            })
+            ingest.MOUNT_ROOTS = []
+
+            self.assertEqual(ingest.find_watch_candidates(), [genuine])
+
+
 if __name__ == "__main__":
     unittest.main()
