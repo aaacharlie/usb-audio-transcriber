@@ -24,6 +24,7 @@ MODEL_PROFILES = profiles_for_config(CFG)
 DEVICE = CFG.get("WHISPER_DEVICE", "cpu")
 COMPUTE = CFG.get("WHISPER_COMPUTE", "int8")
 LANG = CFG.get("WHISPER_LANG", "en") or None
+TASK = CFG.get("WHISPER_TASK", "transcribe") or "transcribe"
 VAD = CFG.get("VAD_ENABLED", "1") == "1"
 VAD_MS = int(CFG.get("VAD_MIN_SILENCE_MS", "1200"))
 OR_KEY = CFG.get("OPENROUTER_API_KEY", "").strip()
@@ -112,7 +113,7 @@ def label_speakers(audio, segments):
 
 
 def write_note(audio, segments, duration, summary_md, profile, comparison=False,
-               status="complete"):
+               status="complete", task=None):
     timestamp = datetime.fromtimestamp(audio.stat().st_mtime)
     VAULT.mkdir(parents=True, exist_ok=True)
     profile_suffix = f" {profile.key}" if comparison else ""
@@ -126,11 +127,13 @@ def write_note(audio, segments, duration, summary_md, profile, comparison=False,
         number += 1
     speech = sum(segment["end"] - segment["start"] for segment in segments)
     speakers = diarize.speaker_names(segments)
+    effective_task = TASK if task is None else task
     lines = ["---", f"date: {timestamp:%Y-%m-%d}", f"time: {timestamp:%H:%M}",
              "type: transcript", "source: recorder", f"audio: {audio}",
              f"duration_min: {round(duration / 60, 1)}",
              f"speech_min: {round(speech / 60, 1)}", f"model: {profile.model_id}",
              f"model_profile: {profile.key}",
+             f"task: {effective_task}",
              f"transcription_status: {status}"]
     if speakers:
         lines.append(f"speakers: {len(speakers)}")
@@ -201,7 +204,7 @@ def main():
                                current_file=audio.name,
                                current_percent=0,
                                eta_seconds=None)
-                kwargs = {"language": LANG, "beam_size": 5}
+                kwargs = {"language": LANG, "task": TASK, "beam_size": 5}
                 if VAD:
                     kwargs.update(vad_filter=True,
                                   vad_parameters={"min_silence_duration_ms": VAD_MS})
@@ -241,7 +244,7 @@ def main():
                         artifact_path(audio, profile, ".txt", comparison), ""
                     )
                     note = write_note(audio, [], info.duration, None, profile,
-                                      comparison, status="no_speech")
+                                      comparison, status="no_speech", task=TASK)
                     write_private_text(
                         artifact_path(audio, profile, ".complete.json", comparison),
                         json.dumps({"status": "no_speech", "note": str(note)}, indent=2),
@@ -260,7 +263,7 @@ def main():
                     artifact_path(audio, profile, ".txt", comparison), full_text
                 )
                 note = write_note(audio, segments, info.duration, summarize(full_text),
-                                  profile, comparison)
+                                  profile, comparison, task=TASK)
                 write_private_text(
                     artifact_path(audio, profile, ".complete.json", comparison),
                     json.dumps({"status": "complete", "note": str(note)}, indent=2),

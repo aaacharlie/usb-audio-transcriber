@@ -69,7 +69,6 @@ meeting.wav.accurate.complete.json
 Keeping the source extension in every artifact prevents a `.wav` and `.mp3` with
 the same stem from overwriting each other. Transcript notes also include `fast`
 or `accurate` in their filenames.
-
 ## Session notes and AI summaries
 
 Voice-activated recorders split one meeting, class, or site visit into many files. After each cycle, `bin/sessions.py` groups transcribed recordings whose gaps are shorter than `SESSION_GAP_MIN` (20 minutes by default) into a session and writes one note per session:
@@ -111,6 +110,10 @@ Speaker labels turn `**[0:12:03]** text` into `**[0:12:03] Speaker 2:** text` an
 Each transcript segment takes the speaker who overlaps it most; segments nobody overlaps stay unlabelled rather than guessed. Labels are `Speaker 1`, `Speaker 2`, ... in order of first appearance, and they appear in the note, the JSON sidecar, the plain-text file, the session note, and the text sent for summaries. If labelling fails (missing terms acceptance, bad token, out of memory), the recording is still transcribed and the log says why.
 
 The first run downloads the pyannote models into the Hugging Face cache. Expect a one-hour recording to take a similar order of time to label as to transcribe on a CPU.
+
+## Translating foreign speech to English
+
+If your recordings contain speech in languages other than English, set `WHISPER_TASK="translate"` in `config.env`. faster-whisper will translate the speech directly into English instead of transcribing in the source language. You can set `WHISPER_LANG` to the specific language code (such as `es`, `fr`, or `de`) or leave it empty to auto-detect the spoken language.
 
 ## Manage model caches
 

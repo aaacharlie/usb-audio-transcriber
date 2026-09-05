@@ -89,6 +89,30 @@ class DoctorConfigTests(unittest.TestCase):
         self.assertIn("VAD_MIN_SILENCE_MS must be a positive integer", failures)
         self.assertIn("MAP_WINDOW_CHARS must be a positive integer", failures)
 
+    def test_check_config_rejects_invalid_whisper_task(self):
+        failures = doctor.check_config({
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            "WHISPER_TASK": "summarize",
+        })
+
+        self.assertIn("WHISPER_TASK must be transcribe or translate", failures)
+
+    def test_check_config_accepts_valid_whisper_task(self):
+        failures = doctor.check_config({
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            "WHISPER_TASK": "translate",
+        })
+
+        self.assertNotIn("WHISPER_TASK must be transcribe or translate", failures)
+
 
 class DoctorWatchDirTests(unittest.TestCase):
     def base_config(self, **extra):
