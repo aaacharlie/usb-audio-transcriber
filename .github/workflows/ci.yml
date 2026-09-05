@@ -15,6 +15,6 @@ jobs:
       - name: Compile Python
         run: python -m py_compile bin/*.py
       - name: Check shell syntax
-        run: bash -n install.sh uninstall.sh bin/run-cycle.sh
+        run: bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh
       - name: Run tests
         run: python -m unittest discover -s tests -v

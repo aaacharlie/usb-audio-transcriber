@@ -9,6 +9,7 @@ systemd/             user service, timer, and plug-in trigger units
 tests/               standard-library unittest suite
 docs/                project documentation
 config.example.env   documented configuration template
+bootstrap.sh          one-command installer: clone or update, then install.sh
 install.sh            local user installation/update
 uninstall.sh          remove installed program and units
 ```
@@ -19,7 +20,7 @@ The CI workflow uses Python 3.12 and runs:
 
 ```bash
 python3 -m py_compile bin/*.py
-bash -n install.sh uninstall.sh bin/run-cycle.sh
+bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh
 python3 -m unittest discover -s tests -v
 ```
 

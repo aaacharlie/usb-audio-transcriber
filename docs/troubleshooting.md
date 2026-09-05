@@ -121,8 +121,9 @@ Do not delete the queue, archive, or state database as a first response. Preserv
 
 ## Reinstall without losing configuration
 
-Running `./install.sh` updates deployed program files and preserves an existing
-installed `config.env`. Dependencies are installed into the virtual environment
+Running `./install.sh`, or the one-line installer again, updates deployed
+program files and preserves an existing installed `config.env`. The one-line
+installer keeps its checkout under `~/.local/share/usb-audio-transcriber/src`. Dependencies are installed into the virtual environment
 before deployed files are replaced, so a failed download cannot damage a
 working installation. The uninstaller removes deployed code, the virtual
 environment, and user units while preserving configuration, runtime state,
