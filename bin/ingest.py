@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import audio from mounted removable media and enqueue it for transcription."""
+"""Import audio from removable media and watched folders, then enqueue it."""
 import hashlib
 import os
 import shutil
@@ -19,6 +19,14 @@ STATE_DB = Path(CFG["STATE_DB"])
 EXTS = {entry.lower() for entry in CFG["AUDIO_EXTS"].split(",")}
 RECORDER_DIR = CFG.get("RECORDER_DIR", "RECORD")
 PURGE = CFG.get("PURGE_DEVICE", "0") == "1"
+# Extra folders to scan recursively (sync folders, phone exports, network
+# shares). Sources found here are never purged: deleting a synced file would
+# propagate the deletion to every other device.
+WATCH_DIRS = [
+    Path(os.path.expandvars(os.path.expanduser(entry.strip())))
+    for entry in CFG.get("WATCH_DIRS", "").split(":")
+    if entry.strip()
+]
 MOUNT_ROOTS = [
     Path("/media") / os.environ.get("USER", "root"),
     Path("/run/media") / os.environ.get("USER", "root"),
@@ -89,6 +97,38 @@ def find_candidates():
     return found
 
 
+def find_watch_candidates():
+    """Discover audio anywhere inside the explicitly configured watch folders."""
+    found = []
+    excluded = [ARCHIVE.resolve(), QUEUE.resolve()]
+    for root in WATCH_DIRS:
+        if not root.is_dir():
+            continue
+        try:
+            entries = sorted(root.rglob("*"))
+        except (PermissionError, OSError):
+            continue
+        for path in entries:
+            try:
+                relative_parts = path.relative_to(root).parts
+                if any(part.startswith(".") for part in relative_parts):
+                    continue  # sync tools keep partial downloads in dot-files
+                if path.is_symlink() or not path.is_file():
+                    continue
+                if path.suffix.lstrip(".").lower() not in EXTS:
+                    continue
+                if path.stat().st_size <= 4096:
+                    continue
+                resolved = path.resolve()
+                if any(resolved == item or item in resolved.parents
+                       for item in excluded):
+                    continue  # never re-import our own archive or queue
+            except OSError:
+                continue
+            found.append(path)
+    return found
+
+
 def archive_path_for(src):
     timestamp = datetime.fromtimestamp(src.stat().st_mtime)
     directory = ARCHIVE / f"{timestamp:%Y}" / f"{timestamp:%m}" / f"{timestamp:%d}"
@@ -143,17 +183,20 @@ def main():
     QUEUE.mkdir(parents=True, exist_ok=True)
     con = init_db()
     try:
-        write_progress(active=False, phase="Scanning USB media", detected_files=0,
+        write_progress(active=False, phase="Scanning for recordings", detected_files=0,
                        imported_files=0, files_completed=0)
         candidates = find_candidates()
-        if not candidates:
-            log("No removable audio found.")
-            write_progress(active=False, phase="No removable audio found")
+        watched = find_watch_candidates()
+        if not candidates and not watched:
+            log("No new audio found on removable media or watched folders.")
+            write_progress(active=False, phase="No recordings found")
             return 0
 
-        log(f"Found {len(candidates)} audio file(s) on mounted media.")
+        log(f"Found {len(candidates)} audio file(s) on mounted media"
+            f" and {len(watched)} in watched folders.")
+        purgeable = set(candidates)
         imported = 0
-        for src in candidates:
+        for src in candidates + watched:
             if not stable(src):
                 log(f"  wait {src.name} (still changing)")
                 continue
@@ -201,7 +244,9 @@ def main():
                             else:
                                 log(f"  !! queue name conflict for "
                                     f"{restored.name}: not queued")
-                if PURGE:
+                if PURGE and src not in purgeable:
+                    log("       kept: watched-folder sources are never purged")
+                elif PURGE:
                     if verified and queue_ready:
                         src.unlink(missing_ok=True)
                         log("       purged duplicate after archive verification")
@@ -224,7 +269,9 @@ def main():
                     "not queued, source kept")
                 continue
             imported += 1
-            if PURGE:
+            if PURGE and src not in purgeable:
+                log("       kept: watched-folder sources are never purged")
+            elif PURGE:
                 try:
                     src.unlink()
                     log("       purged from recorder")
@@ -236,7 +283,8 @@ def main():
                      and path.suffix.lstrip(".").lower() in EXTS)
         log(f"Imported {imported} new file(s).")
         write_progress(active=bool(queued), phase="Queued for transcription",
-                       detected_files=len(candidates), imported_files=imported,
+                       detected_files=len(candidates) + len(watched),
+                       imported_files=imported,
                        total_files=queued, files_completed=0)
         return 0
     finally:

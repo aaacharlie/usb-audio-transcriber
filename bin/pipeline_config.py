@@ -30,6 +30,12 @@ def sync_directory(path):
         os.close(descriptor)
 
 
+def has_display(environ=None):
+    """Return whether a graphical session appears reachable from this process."""
+    environ = os.environ if environ is None else environ
+    return bool(environ.get("DISPLAY") or environ.get("WAYLAND_DISPLAY"))
+
+
 def log(msg):
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
 

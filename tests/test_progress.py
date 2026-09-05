@@ -63,6 +63,37 @@ class ProgressStateTests(unittest.TestCase):
         self.assertIn("About 1m 15s remaining", text)
 
 
+class HeadlessTests(unittest.TestCase):
+    def test_headless_setting_disables_the_window_even_with_a_display(self):
+        with mock.patch.object(progress_popup.shutil, "which", return_value="/usr/bin/zenity"):
+            self.assertFalse(
+                progress_popup.desktop_available({"HEADLESS": "1"}, {"DISPLAY": ":0"})
+            )
+
+    def test_auto_mode_needs_a_display_and_zenity(self):
+        with mock.patch.object(progress_popup.shutil, "which", return_value="/usr/bin/zenity"):
+            self.assertFalse(progress_popup.desktop_available({"HEADLESS": "auto"}, {}))
+            self.assertTrue(
+                progress_popup.desktop_available({}, {"WAYLAND_DISPLAY": "wayland-0"})
+            )
+        with mock.patch.object(progress_popup.shutil, "which", return_value=None):
+            self.assertFalse(progress_popup.desktop_available({}, {"DISPLAY": ":0"}))
+            self.assertFalse(progress_popup.desktop_available({"HEADLESS": "0"}, {}))
+
+    def test_forced_desktop_mode_ignores_missing_display_variables(self):
+        with mock.patch.object(progress_popup.shutil, "which", return_value="/usr/bin/zenity"):
+            self.assertTrue(progress_popup.desktop_available({"HEADLESS": "0"}, {}))
+
+    def test_main_exits_quietly_without_a_desktop(self):
+        with mock.patch.object(progress_popup, "load", return_value={}), \
+                mock.patch.dict("os.environ", {}, clear=True), \
+                mock.patch.object(progress_popup.shutil, "which", return_value="/usr/bin/zenity"), \
+                mock.patch.object(progress_popup.subprocess, "Popen") as popen:
+            self.assertEqual(progress_popup.main(), 0)
+
+        popen.assert_not_called()
+
+
 class ModelProfileTests(unittest.TestCase):
     def test_fast_profile_selects_distilled_model(self):
         profile = profiles_for("fast")[0]

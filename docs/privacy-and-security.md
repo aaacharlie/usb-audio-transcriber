@@ -11,11 +11,13 @@ By default, the project processes all of the following locally:
 - Markdown note generation
 - SQLite deduplication state
 
+Optional speaker labelling (pyannote.audio) also runs locally. Its Hugging Face token is used only to download the gated models, and it lives in `config.env` alongside the OpenRouter key.
+
 No telemetry is implemented by this project.
 
 ## Optional cloud processing
 
-Cloud processing is enabled only when `OPENROUTER_API_KEY` is populated. In that mode, transcript text is sent to the configured OpenRouter model for summarization. This project does not send raw audio to OpenRouter.
+Cloud processing is enabled only when `OPENROUTER_API_KEY` is populated. In that mode, transcript text is sent to the configured OpenRouter model for summarization: each recording's text for the per-file summary (`FILE_SUMMARY`), and the combined text of a whole session for the session summary (`SESSION_SUMMARY`). This project does not send raw audio to OpenRouter. Session notes themselves (links and the combined transcript) are generated locally.
 
 Treat transcripts as potentially sensitive. Before enabling summarization, verify that sending their text to the configured provider is acceptable for the recording's participants and your jurisdiction.
 

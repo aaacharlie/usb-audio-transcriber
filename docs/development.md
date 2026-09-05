@@ -4,10 +4,12 @@
 
 ```text
 bin/                 Python entry points and run-cycle shell script
-systemd/             user service and timer units
+prompts/             default AI prompt templates deployed with the program
+systemd/             user service, timer, and plug-in trigger units
 tests/               standard-library unittest suite
 docs/                project documentation
 config.example.env   documented configuration template
+bootstrap.sh          one-command installer: clone or update, then install.sh
 install.sh            local user installation/update
 uninstall.sh          remove installed program and units
 ```
@@ -18,7 +20,7 @@ The CI workflow uses Python 3.12 and runs:
 
 ```bash
 python3 -m py_compile bin/*.py
-bash -n install.sh uninstall.sh bin/run-cycle.sh
+bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh
 python3 -m unittest discover -s tests -v
 ```
 
@@ -53,7 +55,14 @@ Changes should preserve these properties:
 - leave transcript output available when optional summarization fails
 - resume multi-profile work without redoing durable completed artifacts
 - load only one Whisper model at a time
+- keep speaker labelling optional and non-blocking: a diarization failure still produces a transcript
 - keep `config.env`, runtime data, audio, and generated transcripts untracked
+
+## Releases
+
+1. Update `CHANGELOG.md`: give the top section the new version number and date.
+2. Merge to `main`.
+3. On GitHub open Actions, choose the Release workflow, click "Run workflow", and enter the version (for example `1.0.0`). The workflow runs the checks, tags `v1.0.0` on `main`, and publishes a GitHub release whose notes are that changelog section. Pushing a `v*` tag by hand publishes the release the same way.
 
 ## Submitting changes
 

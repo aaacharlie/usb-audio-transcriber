@@ -12,7 +12,7 @@
 ## Verification
 
 - [ ] `python3 -m py_compile bin/*.py`
-- [ ] `bash -n install.sh uninstall.sh bin/run-cycle.sh`
+- [ ] `bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh`
 - [ ] `python3 -m unittest discover -s tests -v`
 - [ ] `git diff --check`
 

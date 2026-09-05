@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Show Linux desktop progress for the current USB audio transcription."""
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pipeline_config import read_progress
+from pipeline_config import has_display, load, read_progress
 
 
 POLL_SECONDS = 1
@@ -42,7 +43,25 @@ def message(state):
     return "\n".join(lines)
 
 
+def desktop_available(config=None, environ=None):
+    """Decide whether a progress window can and should be shown at all."""
+    headless = (config or {}).get("HEADLESS", "auto").strip().lower()
+    if headless == "1":
+        return False
+    if shutil.which("zenity") is None:
+        return False
+    if headless == "0":
+        return True
+    return has_display(environ)
+
+
 def main():
+    try:
+        config = load()
+    except OSError:
+        config = {}
+    if not desktop_available(config):
+        return 0
     deadline = time.monotonic() + STARTUP_TIMEOUT
     state = read_progress()
     while not state.get("active") and time.monotonic() < deadline:

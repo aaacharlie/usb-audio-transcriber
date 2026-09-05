@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-labelledby="title desc">
+  <title id="title">How USB Audio Transcriber works</title>
+  <desc id="desc">Record with any USB voice recorder, plug it into your Linux machine where Whisper transcribes locally, then read timestamped notes and session summaries in Obsidian.</desc>
+  <defs>
+    <style>
+      .card { fill: #1e293b; stroke: #334155; stroke-width: 2; }
+      .h { font: 700 24px "Segoe UI", Helvetica, Arial, sans-serif; fill: #ffffff; }
+      .t { font: 400 16px "Segoe UI", Helvetica, Arial, sans-serif; fill: #cbd5e1; }
+      .f { font: 500 17px "Segoe UI", Helvetica, Arial, sans-serif; fill: #94a3b8; }
+      .step { font: 700 14px "Segoe UI", Helvetica, Arial, sans-serif; fill: #f59e0b; letter-spacing: 2px; }
+      .arrow { fill: none; stroke: #64748b; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+  <rect width="1200" height="340" rx="24" fill="#0f172a"/>
+
+  <!-- Step 1: record -->
+  <rect class="card" x="40" y="48" width="330" height="214" rx="18"/>
+  <text class="step" x="70" y="88">STEP 1</text>
+  <g transform="translate(290 66)">
+    <rect x="0" y="0" width="44" height="72" rx="10" fill="#f59e0b"/>
+    <rect x="9" y="10" width="26" height="22" rx="4" fill="#0f172a" opacity="0.6"/>
+    <circle cx="22" cy="52" r="7" fill="#ef4444"/>
+  </g>
+  <text class="h" x="70" y="132">Record</text>
+  <text class="t" x="70" y="166">Any USB voice recorder,</text>
+  <text class="t" x="70" y="190">a phone, or a synced folder.</text>
+  <text class="t" x="70" y="214">Voice-activated recorders welcome.</text>
+
+  <path class="arrow" d="M392 155 h 40 m -14 -14 l 14 14 l -14 14"/>
+
+  <!-- Step 2: transcribe -->
+  <rect class="card" x="452" y="48" width="330" height="214" rx="18"/>
+  <text class="step" x="482" y="88">STEP 2</text>
+  <g transform="translate(694 70)">
+    <rect x="0" y="0" width="58" height="40" rx="6" fill="#38bdf8"/>
+    <rect x="6" y="6" width="46" height="28" rx="3" fill="#0f172a" opacity="0.7"/>
+    <rect x="-8" y="42" width="74" height="6" rx="3" fill="#38bdf8"/>
+    <path d="M14 20 h6 l4 -8 l4 16 l4 -12 l4 8 h6" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text class="h" x="482" y="132">Plug in</text>
+  <text class="t" x="482" y="166">Whisper transcribes on your own</text>
+  <text class="t" x="482" y="190">CPU, seconds after the drive mounts.</text>
+  <text class="t" x="482" y="214">Nothing is uploaded.</text>
+
+  <path class="arrow" d="M804 155 h 40 m -14 -14 l 14 14 l -14 14"/>
+
+  <!-- Step 3: read -->
+  <rect class="card" x="864" y="48" width="296" height="214" rx="18"/>
+  <text class="step" x="894" y="88">STEP 3</text>
+  <g transform="translate(1088 66)">
+    <path d="M0 0 h34 l16 16 v56 h-50 z" fill="#a78bfa"/>
+    <path d="M34 0 v16 h16" fill="#0f172a" opacity="0.5"/>
+    <rect x="9" y="30" width="32" height="4" rx="2" fill="#0f172a" opacity="0.6"/>
+    <rect x="9" y="42" width="24" height="4" rx="2" fill="#0f172a" opacity="0.6"/>
+    <rect x="9" y="54" width="30" height="4" rx="2" fill="#0f172a" opacity="0.6"/>
+  </g>
+  <text class="h" x="894" y="132">Read</text>
+  <text class="t" x="894" y="166">Timestamped notes and</text>
+  <text class="t" x="894" y="190">session summaries land in</text>
+  <text class="t" x="894" y="214">your Obsidian vault.</text>
+
+  <text class="f" x="600" y="306" text-anchor="middle">Free and open source  ·  Local by default  ·  No subscription  ·  Linux</text>
+</svg>

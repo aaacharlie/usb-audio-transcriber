@@ -24,6 +24,7 @@ transcripts/
 *.json
 *.txt
 !requirements.txt
+!requirements-diarization.txt
 
 # Editor and OS artifacts
 .DS_Store

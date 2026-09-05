@@ -90,6 +90,181 @@ class DoctorConfigTests(unittest.TestCase):
         self.assertIn("MAP_WINDOW_CHARS must be a positive integer", failures)
 
 
+class DoctorWatchDirTests(unittest.TestCase):
+    def base_config(self, **extra):
+        return {
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            **extra,
+        }
+
+    def test_check_config_rejects_relative_watch_dirs(self):
+        failures = doctor.check_config(self.base_config(WATCH_DIRS="Sync/Memos:/srv/audio"))
+
+        self.assertIn("WATCH_DIRS entry must be an absolute path: Sync/Memos", failures)
+        self.assertEqual(len([f for f in failures if "WATCH_DIRS" in f]), 1)
+
+    def test_check_config_rejects_watching_the_archive_itself(self):
+        failures = doctor.check_config(self.base_config(WATCH_DIRS="/archive"))
+
+        self.assertIn(
+            "WATCH_DIRS entry must not be one of the pipeline's own paths: /archive",
+            failures,
+        )
+
+    def test_missing_watch_dir_is_a_warning_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            present = Path(directory) / "present"
+            present.mkdir()
+            missing = Path(directory) / "missing"
+            config = self.base_config(WATCH_DIRS=f"{present}:{missing}")
+
+            self.assertEqual(doctor.check_config(config), [])
+            self.assertEqual(
+                doctor.check_watch_dirs(config),
+                [f"WATCH_DIRS folder is not a directory right now: {missing}"],
+            )
+
+
+class DoctorHeadlessTests(unittest.TestCase):
+    def test_check_config_rejects_unknown_headless_values(self):
+        failures = doctor.check_config({
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            "HEADLESS": "sometimes",
+        })
+
+        self.assertIn("HEADLESS must be auto, 0, or 1", failures)
+
+    def test_missing_zenity_is_a_warning_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.env"
+            config_path.write_text(
+                f'ARCHIVE_DIR="{directory}/archive"\n'
+                f'QUEUE_DIR="{directory}/queue"\n'
+                f'STATE_DB="{directory}/state/seen.sqlite"\n'
+                f'VAULT_DIR="{directory}/transcripts"\n'
+                'AUDIO_EXTS="wav"\n',
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with mock.patch(
+                        "shutil.which",
+                        side_effect=lambda command:
+                        None if command in {"zenity", "notify-send"} else "/usr/bin/tool",
+                    ), \
+                    mock.patch("importlib.util.find_spec", return_value=object()), \
+                    mock.patch("sys.stdout", output):
+                result = doctor.main([
+                    "--config", str(config_path), "--skip-systemd"
+                ])
+
+            self.assertEqual(result, 0)
+            self.assertIn("WARN command: zenity not found", output.getvalue())
+            self.assertIn("WARN command: notify-send not found", output.getvalue())
+
+    def test_linger_warning_explains_headless_timers(self):
+        completed = mock.Mock(returncode=0, stdout="no\n")
+        with mock.patch.object(doctor.shutil, "which", return_value="/usr/bin/loginctl"), \
+                mock.patch.object(doctor.subprocess, "run", return_value=completed):
+            warning = doctor.linger_warning("pi")
+
+        self.assertIn("loginctl enable-linger pi", warning)
+
+    def test_linger_warning_is_silent_when_lingering_is_on_or_unknown(self):
+        with mock.patch.object(doctor.shutil, "which", return_value="/usr/bin/loginctl"):
+            with mock.patch.object(
+                doctor.subprocess, "run", return_value=mock.Mock(returncode=0, stdout="yes\n")
+            ):
+                self.assertIsNone(doctor.linger_warning("pi"))
+            with mock.patch.object(
+                doctor.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")
+            ):
+                self.assertIsNone(doctor.linger_warning("pi"))
+        with mock.patch.object(doctor.shutil, "which", return_value=None):
+            self.assertIsNone(doctor.linger_warning("pi"))
+
+
+class DoctorSessionTests(unittest.TestCase):
+    def base_config(self, **extra):
+        return {
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            **extra,
+        }
+
+    def test_session_settings_are_validated(self):
+        failures = doctor.check_config(self.base_config(
+            SESSION_GAP_MIN="0", SESSION_SUMMARY="maybe",
+            SESSION_PROMPT_FILE="/definitely/missing/prompt.md",
+        ))
+
+        self.assertIn("SESSION_GAP_MIN must be a positive integer", failures)
+        self.assertIn("SESSION_SUMMARY must be 0 or 1", failures)
+        self.assertIn(
+            "SESSION_PROMPT_FILE is not a readable file: /definitely/missing/prompt.md",
+            failures,
+        )
+
+    def test_bundled_prompt_needs_no_setting(self):
+        self.assertEqual(doctor.check_config(self.base_config(SESSION_PROMPT_FILE="")), [])
+
+
+class DoctorDiarizationTests(unittest.TestCase):
+    def base_config(self, **extra):
+        return {
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            **extra,
+        }
+
+    def test_enabling_diarization_requires_a_token_and_sane_bounds(self):
+        failures = doctor.check_config(self.base_config(
+            DIARIZATION="1", DIARIZATION_MAX_SPEAKERS="many",
+        ))
+
+        self.assertTrue(any(f.startswith("HF_TOKEN is required") for f in failures))
+        self.assertIn("DIARIZATION_MAX_SPEAKERS must be a positive integer or empty", failures)
+
+    def test_diarization_off_needs_nothing(self):
+        self.assertEqual(doctor.check_config(self.base_config(DIARIZATION="0")), [])
+
+    def test_main_requires_pyannote_when_diarization_is_on(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.env"
+            config_path.write_text(
+                f'ARCHIVE_DIR="{directory}/archive"\n'
+                f'QUEUE_DIR="{directory}/queue"\n'
+                f'STATE_DB="{directory}/state/seen.sqlite"\n'
+                f'VAULT_DIR="{directory}/transcripts"\n'
+                'AUDIO_EXTS="wav"\nDIARIZATION=1\nHF_TOKEN="hf_x"\n',
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with mock.patch("shutil.which", return_value="/usr/bin/tool"), \
+                    mock.patch(
+                        "importlib.util.find_spec",
+                        side_effect=lambda name: None if name == "pyannote.audio" else object(),
+                    ), \
+                    mock.patch("sys.stdout", output):
+                result = doctor.main(["--config", str(config_path), "--skip-systemd"])
+
+            self.assertEqual(result, 1)
+            self.assertIn("pyannote.audio not importable", output.getvalue())
+
+
 class DoctorPathTests(unittest.TestCase):
     def test_writable_parent_checks_dotted_directories_themselves(self):
         with tempfile.TemporaryDirectory() as directory:

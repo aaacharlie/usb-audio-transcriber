@@ -4,9 +4,10 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 
 ## Start here
 
-- [Usage guide](usage.md) — normal workflow, outputs, manual runs, cache commands, and isolated benchmarks
+- [Usage guide](usage.md) — normal workflow, outputs, folder watching, session notes and AI summaries, headless machines, manual runs, cache commands, and isolated benchmarks
 - [Configuration reference](configuration.md) — every supported setting and how changes are applied
 - [Whisper model profiles](model-profiles.md) — model trade-offs, measured results, disk/RAM behavior, and selection advice
+- [Obsidian](obsidian.md) — the setup wizard, what lands in the vault, wikilinks and backlinks, sync
 
 ## Understand the system
 
@@ -16,7 +17,8 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 ## Diagnose or contribute
 
 - [Troubleshooting](troubleshooting.md) — inspect-first checks for discovery, services, progress, models, and summarization
-- [Development guide](development.md) — repository layout, checks, design constraints, and contribution workflow
+- [Development guide](development.md) — repository layout, checks, design constraints, releases, and contribution workflow
+- [Changelog](../CHANGELOG.md) — what changed in each release
 - [Contributing](../CONTRIBUTING.md) — pull-request and testing expectations
 - [Security policy](../SECURITY.md) — private vulnerability reporting
 
@@ -24,7 +26,7 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 
 The documentation and implementation are organized around these guarantees:
 
-1. USB source files are not deleted by default.
+1. USB source files are not deleted by default, and watched-folder sources are never deleted.
 2. Imported copies are verified by SHA-256 before entering the queue.
 3. Duplicate content is not re-imported under a different filename.
 4. Transcription is local unless OpenRouter text summarization is explicitly enabled.
