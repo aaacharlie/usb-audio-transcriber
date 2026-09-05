@@ -9,12 +9,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags give the package its version
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Compile Python
-        run: python -m py_compile bin/*.py
+        run: python -m py_compile bin/*.py usb_audio_transcriber/*.py
       - name: Check shell syntax
         run: bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh
       - name: Run tests
         run: python -m unittest discover -s tests -v
+      - name: Build the package
+        run: |
+          find . -name __pycache__ -type d -prune -exec rm -rf {} +
+          python -m pip install --quiet build
+          python -m build
+      - name: Install the wheel with pipx and run the command
+        run: |
+          pipx install dist/*.whl
+          usb-audio-transcriber --version
+          usb-audio-transcriber paths
+          usb-audio-transcriber doctor --help
+          usb-audio-transcriber install --help

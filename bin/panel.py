@@ -3,7 +3,8 @@
 in a terminal.
 
     panel.py serve   run the server (usb-audio-transcriber-panel.service does this)
-    panel.py open    make sure the server is running, then open the panel
+    panel.py open    make sure the server is running, then open the panel as its
+                     own window (Chrome, Chromium, Brave, or Edge) or in the browser
     panel.py url     print the private link, for another device on your network
 
 Every button in the panel maps to a script under bin/. The server listens on
@@ -32,7 +33,7 @@ import setup as setup_module
 from llm import backend_choice, backend_from_config
 from model_profiles import artifact_path, artifacts_complete, cache_path_for, \
     directory_size, hub_cache_root, profiles_for, profiles_for_config
-from pipeline_config import ROOT, load, log, read_progress
+from pipeline_config import ROOT, load, log, read_progress, version
 
 CFG_PATH = ROOT / "config.env"
 BIN = Path(__file__).resolve().parent
@@ -50,6 +51,10 @@ UNITS = {
     "panel": "usb-audio-transcriber-panel.service",
 }
 SECRET_KEYS = ("OPENROUTER_API_KEY", "LLM_API_KEY", "HF_TOKEN")
+# Browsers that can show a page as a plain window: no tabs, no address bar.
+APP_WINDOW_BROWSERS = ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable",
+                       "brave-browser", "microsoft-edge", "microsoft-edge-stable", "vivaldi",
+                       "vivaldi-stable")
 SECRET_PLACEHOLDER = "********"
 ALLOWED_NOTE_SUFFIXES = {".md", ".txt", ".json"}
 
@@ -316,7 +321,7 @@ def status():
         disk = None
     backend = backend_choice(config)
     return {
-        "version": VERSION_FILE.read_text(encoding="utf-8").strip() if VERSION_FILE.exists() else "dev",
+        "version": version(VERSION_FILE),
         "progress": progress,
         "queued": queued,
         "detected": detected,
@@ -479,15 +484,22 @@ class Jobs:
         return job
 
     def _run(self, job, command):
+        # Output is published line by line so the page shows a long job (a model
+        # download, a summary) progressing instead of a bare "Running...".
         try:
-            result = subprocess.run(command, capture_output=True, text=True, check=False,
-                                    cwd=ROOT, timeout=6 * 3600)
-            output = (result.stdout or "") + (result.stderr or "")
-            code = result.returncode
+            process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, text=True, errors="replace",
+                                       cwd=ROOT)
+            with process.stdout:
+                for line in process.stdout:
+                    with self.lock:
+                        job["output"] = (job["output"] + line)[-6000:]
+            code = process.wait()
         except Exception as exc:  # the page must always learn what happened
-            output, code = f"{type(exc).__name__}: {exc}", -1
+            with self.lock:
+                job["output"] = (job["output"] + f"{type(exc).__name__}: {exc}")[-6000:]
+            code = -1
         with self.lock:
-            job["output"] = output[-6000:]
             job["returncode"] = code
             job["status"] = "done" if code == 0 else "failed"
             job["finished"] = datetime.now().isoformat(timespec="seconds")
@@ -772,6 +784,16 @@ def serve(argv):
     return 0
 
 
+def app_window_command(url):
+    """The command that shows the panel as its own window, or None without such a browser."""
+    for name in APP_WINDOW_BROWSERS:
+        found = shutil.which(name)
+        if found:
+            return [found, f"--app={url}", "--window-size=1180,840",
+                    "--class=usb-audio-transcriber"]
+    return None
+
+
 def open_panel(argv):
     import webbrowser
     host, port = bind_settings()
@@ -786,7 +808,13 @@ def open_panel(argv):
             time.sleep(0.1)
     url = f"http://{probe_host}:{port}/?token={token()}"
     print(url)
-    if not argv.no_browser:
+    if argv.no_browser:
+        return 0
+    command = None if argv.browser else app_window_command(url)
+    if command:
+        subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
+    else:
         webbrowser.open(url)
     return 0
 
@@ -798,6 +826,8 @@ def main(argv=None):
     sub.add_parser("serve", help="run the panel server in the foreground")
     opener = sub.add_parser("open", help="start the server if needed and open the panel")
     opener.add_argument("--no-browser", action="store_true", help="only print the link")
+    opener.add_argument("--browser", action="store_true",
+                        help="open a browser tab even when a browser could show it as a window")
     sub.add_parser("url", help="print the private link (network address when PANEL_BIND allows it)")
     args = parser.parse_args(argv)
     if args.command == "serve":

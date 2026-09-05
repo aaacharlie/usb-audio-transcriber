@@ -79,11 +79,19 @@ if [ "$RUN_SETUP" = 1 ] && [ "$FRESH_CONFIG" = 1 ]; then
 fi
 
 # systemd expands % specifiers in unit files, and an unquoted patsub
-# replacement expands & on bash 5.2+, so escape/quote both.
+# replacement expands & on bash 5.2+, so escape/quote both. The templates
+# are shared with the pipx install, which fills the same two placeholders
+# with its own command.
 rendered_root="${INSTALL_ROOT//\%/%%}"
+cycle_command="\"$rendered_root/bin/run-cycle.sh\""
+panel_command="\"$rendered_root/venv/bin/python\" \"$rendered_root/bin/panel.py\""
+render() {
+  local text=$1
+  text="${text//@CYCLE_COMMAND@/"$cycle_command"}"
+  printf '%s\n' "${text//@PANEL_COMMAND@/"$panel_command"}"
+}
 for unit in "$APP_NAME.service" "$APP_NAME-plug.service" "$APP_NAME-panel.service"; do
-  template=$(<"$SOURCE_ROOT/systemd/$unit")
-  printf '%s\n' "${template//@INSTALL_ROOT@/"$rendered_root"}" > "$UNIT_DIR/$unit"
+  render "$(<"$SOURCE_ROOT/systemd/$unit")" > "$UNIT_DIR/$unit"
 done
 cp "$SOURCE_ROOT/systemd/$APP_NAME.timer" "$UNIT_DIR/$APP_NAME.timer"
 cp "$SOURCE_ROOT/systemd/$APP_NAME-plug.path" "$UNIT_DIR/$APP_NAME-plug.path"
@@ -95,8 +103,7 @@ systemctl --user enable --now "$APP_NAME-panel.service"
 # App menu entry and icon for the control panel.
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 mkdir -p "$DATA_HOME/applications" "$DATA_HOME/icons/hicolor/scalable/apps"
-desktop=$(<"$SOURCE_ROOT/share/$APP_NAME.desktop")
-printf '%s\n' "${desktop//@INSTALL_ROOT@/"$rendered_root"}" \
+render "$(<"$SOURCE_ROOT/share/$APP_NAME.desktop")" \
   > "$DATA_HOME/applications/$APP_NAME.desktop"
 cp "$SOURCE_ROOT/share/$APP_NAME.svg" "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg"
 command -v update-desktop-database >/dev/null && \

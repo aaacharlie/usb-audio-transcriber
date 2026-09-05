@@ -25,6 +25,14 @@ curl -fsSL https://raw.githubusercontent.com/aaacharlie/usb-audio-transcriber/ma
 
 The installer creates a private virtual environment, asks where your notes should go (it finds your Obsidian vaults for you), and enables the background service. Then plug in the recorder. Run the same line again later to update.
 
+Prefer pipx? The same program is a Python package with a `usb-audio-transcriber` command:
+
+```bash
+sudo apt install pipx ffmpeg zenity libnotify-bin
+pipx install git+https://github.com/aaacharlie/usb-audio-transcriber   # pipx install usb-audio-transcriber once it is on PyPI
+usb-audio-transcriber install
+```
+
 Prefer to read the code first? Clone the repository and run `./install.sh`; see [Install](#install).
 
 ## What you get
@@ -50,7 +58,7 @@ Good fits: lectures and classes, meetings and site visits, interviews, long phon
   <img src="docs/assets/panel-home.png" alt="The control panel's home screen: pipeline state, library counts, summary backend, Whisper models, recent recordings" width="100%">
 </p>
 
-Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel: what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
+Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel as its own window (with Chrome, Chromium, Brave, or Edge installed; a browser tab otherwise): what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
 
 ## Real-world test: a $50 recorder from Amazon
 
@@ -134,6 +142,7 @@ Either way, remember that pasting a transcript into a cloud AI sends its text to
 - `ffmpeg` for audio decoding
 - `git` for the one-line installer
 - Optional: `zenity` for the progress window, `libnotify-bin` for notifications, a web browser for the control panel
+- Optional: `pipx` for the package install
 - Internet access the first time faster-whisper downloads the configured model
 
 On Ubuntu/Debian:
@@ -144,7 +153,11 @@ sudo apt install python3-venv ffmpeg zenity libnotify-bin git
 
 ## Install
 
-Either the one-line installer from [Quick start](#quick-start), or from a clone:
+Three ways to the same installation. Whichever you pick, settings live in `~/.local/share/usb-audio-transcriber/config.env` (`config.example.env` documents every option), the timer and the plug-in trigger become user systemd units, and **USB Audio Transcriber** lands in your app menu.
+
+**The one-line installer** from [Quick start](#quick-start): clones the source under `~/.local/share/usb-audio-transcriber/src`, creates a virtual environment, runs the setup wizard on a fresh configuration, and enables the units. Run it again to update.
+
+**From a clone:**
 
 ```bash
 git clone https://github.com/aaacharlie/usb-audio-transcriber.git
@@ -152,22 +165,38 @@ cd usb-audio-transcriber
 ./install.sh                      # add --with-diarization for speaker labels
 ```
 
-The installer deploys to `~/.local/share/usb-audio-transcriber`, creates a virtual environment, runs the setup wizard on a fresh configuration, and enables the timer and the plug-in trigger. Settings live in `~/.local/share/usb-audio-transcriber/config.env`; `config.example.env` documents every option, and `bin/setup.py` changes the essentials without editing.
+**With pipx**, which keeps the program in its own environment and gives you a `usb-audio-transcriber` command:
+
+```bash
+sudo apt install pipx ffmpeg zenity libnotify-bin
+pipx install git+https://github.com/aaacharlie/usb-audio-transcriber   # or, once published: pipx install usb-audio-transcriber
+usb-audio-transcriber install     # add --with-diarization for speaker labels
+```
+
+`usb-audio-transcriber install` does what `install.sh` does apart from the virtual environment (pipx made one): the data folder, `config.env`, the doctor gate, the wizard, the units, and the menu entry. Every script is then a subcommand: `usb-audio-transcriber doctor`, `sessions list`, `search roof leak`, `model-cache status both`, `panel open`, `setup`, `cycle`, `paths`.
 
 ### Update an existing installation
 
+One-line installer or clone:
+
 ```bash
-cd usb-audio-transcriber
-git pull --ff-only
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/aaacharlie/usb-audio-transcriber/main/bootstrap.sh | bash
+# or, in the clone: git pull --ff-only && ./install.sh
 ```
 
-or run the one-line installer again. Either way the installed `config.env` is preserved.
+pipx:
+
+```bash
+usb-audio-transcriber update      # pipx upgrade, then install again
+```
+
+Either way the installed `config.env` is preserved.
 
 ### Uninstall
 
 ```bash
-./uninstall.sh
+./uninstall.sh                    # one-line installer or clone
+usb-audio-transcriber uninstall && pipx uninstall usb-audio-transcriber   # pipx
 ```
 
 This removes deployed code, the virtual environment, and the user systemd units. It deliberately preserves `config.env`, runtime state, archives, transcripts, and model caches so uninstalling cannot silently erase user data.

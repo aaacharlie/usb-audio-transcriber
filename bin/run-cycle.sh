@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# ROOT holds config.env and var/. With install.sh the program lives there too
+# (bin/ and venv/); a pipx install passes its own interpreter and bin/ folder.
 ROOT="${USB_AUDIO_TRANSCRIBER_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BIN="${USB_AUDIO_TRANSCRIBER_BIN:-$ROOT/bin}"
+PYTHON="${USB_AUDIO_TRANSCRIBER_PYTHON:-$ROOT/venv/bin/python}"
 LOCK_WAIT="${USB_AUDIO_TRANSCRIBER_LOCK_WAIT:-300}"
+export USB_AUDIO_TRANSCRIBER_ROOT="$ROOT"
 mkdir -p "$ROOT/var/logs" "$ROOT/var/state"
 exec 9>"$ROOT/var/state/cycle.lock"
 if [ "${1:-}" = "--wait" ]; then
@@ -12,10 +17,10 @@ else
   flock -n 9 || { echo "cycle already running, skipping"; exit 0; }
 fi
 {
-  "$ROOT/venv/bin/python" "$ROOT/bin/ingest.py"
-  "$ROOT/venv/bin/python" "$ROOT/bin/progress-popup.py" \
+  "$PYTHON" "$BIN/ingest.py"
+  "$PYTHON" "$BIN/progress-popup.py" \
     >>"$ROOT/var/logs/pipeline.log" 2>&1 9>&- &
-  "$ROOT/venv/bin/python" "$ROOT/bin/transcribe.py"
-  "$ROOT/venv/bin/python" "$ROOT/bin/sessions.py"
-  "$ROOT/venv/bin/python" "$ROOT/bin/search.py" --index
+  "$PYTHON" "$BIN/transcribe.py"
+  "$PYTHON" "$BIN/sessions.py"
+  "$PYTHON" "$BIN/search.py" --index
 } 2>&1 | tee -a "$ROOT/var/logs/pipeline.log"

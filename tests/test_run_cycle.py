@@ -164,6 +164,41 @@ class SessionStepTests(unittest.TestCase):
             self.assertEqual(log.read_text(encoding="utf-8").split(), ["transcribe"])
 
 
+class PipxLayoutTests(unittest.TestCase):
+    def test_interpreter_and_program_folder_can_live_outside_the_data_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "data root"
+            program = Path(directory) / "package"
+            (program / "bin").mkdir(parents=True)
+            root.mkdir()
+            for name in ("ingest.py", "progress-popup.py", "transcribe.py", "sessions.py",
+                         "search.py"):
+                (program / "bin" / name).touch()
+            python = program / "python"
+            log = root / "calls"
+            python.write_text(
+                "#!/usr/bin/env bash\n"
+                f"echo \"$1 root=$USB_AUDIO_TRANSCRIBER_ROOT\" >> '{log}'\n",
+                encoding="utf-8",
+            )
+            python.chmod(python.stat().st_mode | stat.S_IXUSR)
+
+            result = subprocess.run(
+                ["bash", str(ROOT / "bin" / "run-cycle.sh")],
+                capture_output=True, text=True, check=False,
+                env=os.environ | {"USB_AUDIO_TRANSCRIBER_ROOT": str(root),
+                                  "USB_AUDIO_TRANSCRIBER_PYTHON": str(python),
+                                  "USB_AUDIO_TRANSCRIBER_BIN": str(program / "bin")},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            calls = log.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(calls[0], f"{program / 'bin' / 'ingest.py'} root={root}")
+            self.assertIn(f"{program / 'bin' / 'search.py'} root={root}", calls)
+            self.assertTrue((root / "var" / "logs" / "pipeline.log").is_file())
+            self.assertFalse((root / "venv").exists(), "no virtual environment is needed there")
+
+
 class LockTests(unittest.TestCase):
     def fake_root(self, directory):
         root = Path(directory)
