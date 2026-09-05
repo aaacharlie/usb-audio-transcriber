@@ -7,7 +7,8 @@
 3. Mount or plug in removable media containing audio directly inside the configured recorder directory, `RECORD` by default.
 4. Wait for the next scan, normally within about one minute.
 5. Watch the Zenity window for detected files, active file/model, percentage, and estimated time remaining.
-6. Open the configured transcript directory after completion.
+6. A desktop notification announces finished notes. Click it to open the note, or the transcript folder when several notes were written.
+7. Open the configured transcript directory after completion.
 
 The pipeline scans `/media/$USER`, `/run/media/$USER`, and `/mnt`. It ignores audio outside a directory whose name exactly matches `RECORDER_DIR`.
 

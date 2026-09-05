@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import notify
 from model_profiles import artifact_path, artifacts_complete, profiles_for_config
 from pipeline_config import load, log, sync_directory, write_progress
 
@@ -172,6 +173,7 @@ def main():
     comparison = len(MODEL_PROFILES) > 1
     total_work = len(pending) * len(MODEL_PROFILES)
     completed = 0
+    notes_written = []
     con = sqlite3.connect(STATE_DB)
     try:
         for profile in MODEL_PROFILES:
@@ -238,6 +240,7 @@ def main():
                         json.dumps({"status": "no_speech", "note": str(note)}, indent=2),
                     )
                     log(f"  no speech detected -> {note.name}")
+                    notes_written.append(note)
                     completed += 1
                     continue
                 write_private_text(
@@ -258,6 +261,7 @@ def main():
                 elapsed = time.time() - started
                 log(f"  {profile.key} done in {hhmmss(elapsed)} "
                     f"({info.duration / elapsed:.1f}x realtime) -> {note.name}")
+                notes_written.append(note)
                 completed += 1
             del model
             gc.collect()
@@ -273,12 +277,31 @@ def main():
         con.close()
     write_progress(active=False, phase="Transcription complete", total_files=total_work,
                    files_completed=completed, current_percent=100, eta_seconds=0)
+    announce(notes_written)
     return 0
 
 
-if __name__ == "__main__":
+def announce(notes):
+    """Tell the desktop that notes are ready; clicking opens the note or folder."""
+    if not notes:
+        return
+    if len(notes) == 1:
+        notify.send("Transcript ready", notes[0].stem, open_path=notes[0], config=CFG)
+    else:
+        notify.send("Transcripts ready", f"{len(notes)} new notes in {VAULT.name}",
+                    open_path=VAULT, config=CFG)
+
+
+def run():
+    """Run main() and record a failure for the desktop before propagating it."""
     try:
-        sys.exit(main())
+        return main()
     except BaseException as exc:
         write_progress(active=False, phase="Transcription failed", error=type(exc).__name__)
+        notify.send("Transcription failed",
+                    f"{type(exc).__name__}: see var/logs/pipeline.log", config=CFG)
         raise
+
+
+if __name__ == "__main__":
+    sys.exit(run())

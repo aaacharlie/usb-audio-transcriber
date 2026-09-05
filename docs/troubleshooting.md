@@ -59,6 +59,13 @@ A log message saying `cycle already running, skipping` means another cycle holds
 - Inspect `~/.local/share/usb-audio-transcriber/var/state/progress.json` for the most recent phase.
 - The service can continue successfully even if the desktop window cannot be shown.
 
+## No notification appears
+
+- Notifications need `notify-send` (package `libnotify-bin` on Debian/Ubuntu) and a graphical session reachable from the service, exactly like the progress window.
+- `NOTIFY="0"` or `HEADLESS="1"` disables them.
+- Click-to-open needs a `notify-send` that supports `--action` (libnotify 0.8 or newer) and `xdg-open`. Older versions still show the notification without the action.
+- A failed run also sends a "Transcription failed" notification; the log has the details.
+
 ## Model download or load fails
 
 ```bash

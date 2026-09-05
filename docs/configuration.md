@@ -61,6 +61,7 @@ The stock CPU configuration is deliberately conservative. GPU users must select 
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `HEADLESS` | `auto` | `auto` shows the progress window only when a graphical session and `zenity` exist; `1` never shows it; `0` always tries |
+| `NOTIFY` | `auto` | Desktop notification when notes are ready, with click-to-open where `notify-send` supports actions; `1` always tries, `0` never |
 
 Headless machines also need `loginctl enable-linger "$USER"` so the user timer keeps running without a login session; the doctor warns when lingering is off.
 

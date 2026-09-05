@@ -47,7 +47,7 @@ def check_config(config):
     for name in ("PURGE_DEVICE", "VAD_ENABLED"):
         if config.get(name, "0").strip() not in {"0", "1"}:
             failures.append(f"{name} must be 0 or 1")
-    for name in ("HEADLESS",):
+    for name in ("HEADLESS", "NOTIFY"):
         if config.get(name, "auto").strip().lower() not in {"auto", "0", "1"}:
             failures.append(f"{name} must be auto, 0, or 1")
     for name, default in (

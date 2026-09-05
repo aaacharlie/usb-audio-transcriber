@@ -31,6 +31,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 | `bin/ingest.py` | Discover recorder files and watched-folder audio, wait for stable file size, hash, archive, verify, deduplicate, and enqueue |
 | `bin/transcribe.py` | Load configured faster-whisper model profiles, transcribe queued recordings, optionally summarize, and write notes |
 | `bin/progress-popup.py` | Read the atomic progress file and present file/model progress and ETA through Zenity |
+| `bin/notify.py` | Send desktop notifications when notes are ready or a run fails; a detached helper waits for the click and opens the note |
 | `bin/pipeline_config.py` | Parse `config.env`, log messages, and atomically read/write progress state |
 | `bin/model_profiles.py` | Define supported model profiles, artifact naming, and Hugging Face cache paths |
 | `bin/model-cache.py` | Inspect, download, or remove supported model disk caches |
