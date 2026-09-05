@@ -38,6 +38,7 @@ Prefer to read the code first? Clone the repository and run `./install.sh`; see 
 - **Speaker labels, optionally.** Turn on pyannote diarization for `Speaker 1` / `Speaker 2` labels, computed locally.
 - **Desktop-friendly.** A progress window with a time estimate, and a notification you can click to open the finished note.
 - **Runs headless.** No desktop? Put it on a Raspberry Pi or a home server and let the notes land in a synced folder.
+- **Search everything from the terminal.** `search.py roof leak` finds every matching moment across all your recordings, newest first, with the timestamp and speaker.
 - **Pick your speed.** `fast` transcribed a 58-minute recording in about 17 minutes on a plain CPU. `accurate` is there for hard audio, and `both` gives you an A/B comparison from the same file.
 
 Good fits: lectures and classes, meetings and site visits, interviews, long phone calls on speaker, and voice memos you would otherwise never listen to again.

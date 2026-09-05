@@ -84,6 +84,12 @@ $PYTHON $APP/bin/model-cache.py download fast
 
 Check free disk space and network access. For GPU configurations, verify that the selected `WHISPER_DEVICE` and `WHISPER_COMPUTE` are supported by the installed CTranslate2 stack. Switching back to `cpu` / `int8` is the conservative diagnostic baseline.
 
+## Search finds nothing
+
+- Run `search.py --index` once; the index is built from the JSON sidecars next to the archived audio, and only completed recordings are indexed.
+- Every word must match. Try fewer words, a prefix (`plumb*`), or `--raw` with FTS5 syntax such as `roof OR gutter`.
+- The doctor warns when the Python's SQLite lacks FTS5; that is rare and means search is unavailable on that machine.
+
 ## A session note is missing or has no summary
 
 - Session notes are written at the end of a cycle, after transcription. `sessions.py list` shows what exists.

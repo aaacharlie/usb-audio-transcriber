@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Full-text search across all transcripts (`bin/search.py`): an FTS5 index in the state database, refreshed every cycle, with `--since`, `--speaker`, prefix, `--raw`, and `--json` options. (#11)
 - `WHISPER_TASK="translate"` translates speech in other languages straight into English instead of transcribing it; the task is validated by the doctor and recorded in each note's front matter (#13, contributed by @anni-x1).
 
 ## [1.0.0] - 2026-09-05

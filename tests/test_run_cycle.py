@@ -120,7 +120,8 @@ class SessionStepTests(unittest.TestCase):
         venv_bin = root / "venv" / "bin"
         bin_dir.mkdir(parents=True)
         venv_bin.mkdir(parents=True)
-        for name in ("ingest.py", "progress-popup.py", "transcribe.py", "sessions.py"):
+        for name in ("ingest.py", "progress-popup.py", "transcribe.py", "sessions.py",
+                     "search.py"):
             (bin_dir / name).touch()
         python = venv_bin / "python"
         log = root / "order"
@@ -129,6 +130,7 @@ class SessionStepTests(unittest.TestCase):
             "case $1 in\n"
             f"  */transcribe.py) echo transcribe >> '{log}'; exit {transcribe_exit} ;;\n"
             f"  */sessions.py) echo sessions >> '{log}'; exit 0 ;;\n"
+            f"  */search.py) echo search >> '{log}'; exit 0 ;;\n"
             "  *) exit 0 ;;\n"
             "esac\n",
             encoding="utf-8",
@@ -146,7 +148,8 @@ class SessionStepTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stdout)
-            self.assertEqual(log.read_text(encoding="utf-8").split(), ["transcribe", "sessions"])
+            self.assertEqual(log.read_text(encoding="utf-8").split(),
+                             ["transcribe", "sessions", "search"])
 
     def test_sessions_do_not_run_after_a_transcription_failure(self):
         with tempfile.TemporaryDirectory() as directory:
