@@ -84,6 +84,8 @@ With `OPENROUTER_API_KEY` set, the pipeline sends the ordered transcripts to the
 
 A session is closed when its note is written. Recordings that arrive later start a new session, even if they would have fitted the gap rule. A session whose recordings are still being transcribed waits for the next cycle.
 
+Updating an installation that already has months of recordings writes session notes for all of them on the first cycle. Sessions that ended more than `SESSION_BACKFILL_DAYS` ago (7 by default) get their note without an automatic AI summary, so the update does not send your whole history to the model in one go; `sessions.py retry` summarizes those older sessions whenever you decide to. When more than three notes are written in one cycle you get a single desktop notification instead of one per note.
+
 Manual commands, run with the installed virtual environment:
 
 ```bash

@@ -245,6 +245,11 @@ class DoctorSessionTests(unittest.TestCase):
         ))
 
         self.assertIn("SESSION_GAP_MIN must be a positive integer", failures)
+        self.assertIn(
+            "SESSION_BACKFILL_DAYS must be a positive integer or empty",
+            doctor.check_config(self.base_config(SESSION_BACKFILL_DAYS="soon")),
+        )
+        self.assertEqual(doctor.check_config(self.base_config(SESSION_BACKFILL_DAYS="")), [])
         self.assertIn("SESSION_SUMMARY must be 0 or 1", failures)
         self.assertIn(
             "SESSION_PROMPT_FILE is not a readable file: /definitely/missing/prompt.md",
