@@ -84,6 +84,13 @@ $PYTHON $APP/bin/model-cache.py download fast
 
 Check free disk space and network access. For GPU configurations, verify that the selected `WHISPER_DEVICE` and `WHISPER_COMPUTE` are supported by the installed CTranslate2 stack. Switching back to `cpu` / `int8` is the conservative diagnostic baseline.
 
+## A session note is missing or has no summary
+
+- Session notes are written at the end of a cycle, after transcription. `sessions.py list` shows what exists.
+- A session whose recordings are still queued waits for the next cycle; the log says `still being transcribed; waiting`.
+- Recordings farther apart than `SESSION_GAP_MIN` become separate sessions on purpose. A recording that arrives after its session was written starts a new session; `sessions.py rebuild --date YYYY-MM-DD` regroups the whole day.
+- A note without a summary means no key, `SESSION_SUMMARY=0`, or a failed request (the note says which). After fixing the cause, run `sessions.py retry`.
+
 ## OpenRouter summarization fails
 
 Transcription should still be written; the log records the summarization failure. Verify the key, model ID, account availability, and network access. Clear `OPENROUTER_API_KEY` to restore local-only operation.

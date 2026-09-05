@@ -10,7 +10,7 @@ systemctl --user disable --now "$APP_NAME-plug.path" 2>/dev/null || true
 rm -f "$UNIT_DIR/$APP_NAME.service" "$UNIT_DIR/$APP_NAME.timer" \
   "$UNIT_DIR/$APP_NAME-plug.service" "$UNIT_DIR/$APP_NAME-plug.path"
 systemctl --user daemon-reload
-rm -rf "$INSTALL_ROOT/bin" "$INSTALL_ROOT/systemd" "$INSTALL_ROOT/venv"
+rm -rf "$INSTALL_ROOT/bin" "$INSTALL_ROOT/systemd" "$INSTALL_ROOT/prompts" "$INSTALL_ROOT/venv"
 rm -f "$INSTALL_ROOT/requirements.txt" "$INSTALL_ROOT/config.example.env"
 rmdir "$INSTALL_ROOT" 2>/dev/null || true
 echo "Uninstalled program files and user systemd units. Local configuration, runtime state, archives, transcripts, and model caches were preserved."

@@ -73,7 +73,22 @@ Headless machines also need `loginctl enable-linger "$USER"` so the user timer k
 | `OPENROUTER_MODEL` | `anthropic/claude-haiku-4.5` | OpenRouter model identifier |
 | `MAP_WINDOW_CHARS` | `80000` | Character window used before map-reduce summarization |
 
+| `FILE_SUMMARY` | `1` | Per-recording summary block at the top of each transcript note when a key is set |
+
 With no API key, transcription and note generation remain local. With a key, transcript text is sent to OpenRouter; audio is not sent by this project. Do not commit `config.env`.
+
+## Session notes
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `SESSION_NOTES` | `1` | Write one note per session after each cycle |
+| `SESSION_GAP_MIN` | `20` | Recordings separated by a longer silence start a new session |
+| `SESSION_SUMMARY` | `1` | Add an AI summary to session notes when `OPENROUTER_API_KEY` is set |
+| `SESSION_SUMMARY_MODEL` | empty | OpenRouter model for session summaries; empty means `OPENROUTER_MODEL` |
+| `SESSION_SUBJECT` | empty | Subject matter inserted into the summary prompt |
+| `SESSION_PROMPT_FILE` | empty | Custom prompt template containing `{subject}`; empty uses `prompts/session-summary.md` |
+
+Session notes work without any key: the combined transcript and the wikilinks need no network. Only the summary uses OpenRouter, and it sends the combined transcript text of the whole session.
 
 ## Applying changes
 

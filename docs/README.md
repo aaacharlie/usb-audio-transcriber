@@ -4,7 +4,7 @@ This directory is the project's in-repository wiki. It is versioned and reviewed
 
 ## Start here
 
-- [Usage guide](usage.md) — normal workflow, outputs, manual runs, cache commands, and isolated benchmarks
+- [Usage guide](usage.md) — normal workflow, outputs, folder watching, session notes and AI summaries, headless machines, manual runs, cache commands, and isolated benchmarks
 - [Configuration reference](configuration.md) — every supported setting and how changes are applied
 - [Whisper model profiles](model-profiles.md) — model trade-offs, measured results, disk/RAM behavior, and selection advice
 

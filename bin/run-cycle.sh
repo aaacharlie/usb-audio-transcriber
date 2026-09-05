@@ -16,4 +16,5 @@ fi
   "$ROOT/venv/bin/python" "$ROOT/bin/progress-popup.py" \
     >>"$ROOT/var/logs/pipeline.log" 2>&1 9>&- &
   "$ROOT/venv/bin/python" "$ROOT/bin/transcribe.py"
+  "$ROOT/venv/bin/python" "$ROOT/bin/sessions.py"
 } 2>&1 | tee -a "$ROOT/var/logs/pipeline.log"

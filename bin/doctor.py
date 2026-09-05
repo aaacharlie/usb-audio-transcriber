@@ -44,7 +44,8 @@ def check_config(config):
         profiles_for_config(config)
     except ValueError as exc:
         failures.append(f"invalid WHISPER_MODEL_PROFILE: {exc}")
-    for name in ("PURGE_DEVICE", "VAD_ENABLED"):
+    for name in ("PURGE_DEVICE", "VAD_ENABLED", "SESSION_NOTES", "SESSION_SUMMARY",
+                 "FILE_SUMMARY"):
         if config.get(name, "0").strip() not in {"0", "1"}:
             failures.append(f"{name} must be 0 or 1")
     for name in ("HEADLESS", "NOTIFY"):
@@ -53,6 +54,7 @@ def check_config(config):
     for name, default in (
         ("VAD_MIN_SILENCE_MS", "1200"),
         ("MAP_WINDOW_CHARS", "80000"),
+        ("SESSION_GAP_MIN", "20"),
     ):
         try:
             valid = int(config.get(name, default).strip()) > 0
@@ -60,6 +62,9 @@ def check_config(config):
             valid = False
         if not valid:
             failures.append(f"{name} must be a positive integer")
+    prompt_file = config.get("SESSION_PROMPT_FILE", "").strip()
+    if prompt_file and not Path(prompt_file).expanduser().is_file():
+        failures.append(f"SESSION_PROMPT_FILE is not a readable file: {prompt_file}")
     for entry in watch_dirs(config):
         if not entry.is_absolute():
             failures.append(f"WATCH_DIRS entry must be an absolute path: {entry}")

@@ -4,7 +4,8 @@
 
 ```text
 bin/                 Python entry points and run-cycle shell script
-systemd/             user service and timer units
+prompts/             default AI prompt templates deployed with the program
+systemd/             user service, timer, and plug-in trigger units
 tests/               standard-library unittest suite
 docs/                project documentation
 config.example.env   documented configuration template

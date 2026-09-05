@@ -34,14 +34,15 @@ chmod 600 "$INSTALL_ROOT/config.env"
 "$INSTALL_ROOT/venv/bin/python" "$SOURCE_ROOT/bin/doctor.py" \
   --config "$INSTALL_ROOT/config.env" --skip-systemd
 
-for directory in bin systemd; do
+for directory in bin systemd prompts; do
   rm -rf "$INSTALL_ROOT/$directory"
   cp -a "$SOURCE_ROOT/$directory" "$INSTALL_ROOT/$directory"
 done
 cp "$SOURCE_ROOT/requirements.txt" "$INSTALL_ROOT/requirements.txt"
 cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
-  "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py"
+  "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py" \
+  "$INSTALL_ROOT/bin/sessions.py" "$INSTALL_ROOT/bin/notify.py"
 
 # systemd expands % specifiers in unit files, and an unquoted patsub
 # replacement expands & on bash 5.2+, so escape/quote both.

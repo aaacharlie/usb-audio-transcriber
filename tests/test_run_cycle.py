@@ -113,6 +113,54 @@ class RunCycleTests(unittest.TestCase):
             self.assertTrue(marker.exists())
 
 
+class SessionStepTests(unittest.TestCase):
+    def fake_root(self, directory, transcribe_exit):
+        root = Path(directory)
+        bin_dir = root / "bin"
+        venv_bin = root / "venv" / "bin"
+        bin_dir.mkdir(parents=True)
+        venv_bin.mkdir(parents=True)
+        for name in ("ingest.py", "progress-popup.py", "transcribe.py", "sessions.py"):
+            (bin_dir / name).touch()
+        python = venv_bin / "python"
+        log = root / "order"
+        python.write_text(
+            "#!/usr/bin/env bash\n"
+            "case $1 in\n"
+            f"  */transcribe.py) echo transcribe >> '{log}'; exit {transcribe_exit} ;;\n"
+            f"  */sessions.py) echo sessions >> '{log}'; exit 0 ;;\n"
+            "  *) exit 0 ;;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        python.chmod(python.stat().st_mode | stat.S_IXUSR)
+        return root, log
+
+    def test_sessions_run_after_transcription(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, log = self.fake_root(directory, transcribe_exit=0)
+            result = subprocess.run(
+                ["bash", str(ROOT / "bin" / "run-cycle.sh")],
+                capture_output=True, text=True, check=False,
+                env=os.environ | {"USB_AUDIO_TRANSCRIBER_ROOT": str(root)},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(log.read_text(encoding="utf-8").split(), ["transcribe", "sessions"])
+
+    def test_sessions_do_not_run_after_a_transcription_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, log = self.fake_root(directory, transcribe_exit=3)
+            result = subprocess.run(
+                ["bash", str(ROOT / "bin" / "run-cycle.sh")],
+                capture_output=True, text=True, check=False,
+                env=os.environ | {"USB_AUDIO_TRANSCRIBER_ROOT": str(root)},
+            )
+
+            self.assertEqual(result.returncode, 3)
+            self.assertEqual(log.read_text(encoding="utf-8").split(), ["transcribe"])
+
+
 class LockTests(unittest.TestCase):
     def fake_root(self, directory):
         root = Path(directory)

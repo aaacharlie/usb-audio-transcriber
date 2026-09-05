@@ -191,6 +191,34 @@ class DoctorHeadlessTests(unittest.TestCase):
             self.assertIsNone(doctor.linger_warning("pi"))
 
 
+class DoctorSessionTests(unittest.TestCase):
+    def base_config(self, **extra):
+        return {
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            **extra,
+        }
+
+    def test_session_settings_are_validated(self):
+        failures = doctor.check_config(self.base_config(
+            SESSION_GAP_MIN="0", SESSION_SUMMARY="maybe",
+            SESSION_PROMPT_FILE="/definitely/missing/prompt.md",
+        ))
+
+        self.assertIn("SESSION_GAP_MIN must be a positive integer", failures)
+        self.assertIn("SESSION_SUMMARY must be 0 or 1", failures)
+        self.assertIn(
+            "SESSION_PROMPT_FILE is not a readable file: /definitely/missing/prompt.md",
+            failures,
+        )
+
+    def test_bundled_prompt_needs_no_setting(self):
+        self.assertEqual(doctor.check_config(self.base_config(SESSION_PROMPT_FILE="")), [])
+
+
 class DoctorPathTests(unittest.TestCase):
     def test_writable_parent_checks_dotted_directories_themselves(self):
         with tempfile.TemporaryDirectory() as directory:

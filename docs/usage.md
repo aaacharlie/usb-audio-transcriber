@@ -70,6 +70,35 @@ Keeping the source extension in every artifact prevents a `.wav` and `.mp3` with
 the same stem from overwriting each other. Transcript notes also include `fast`
 or `accurate` in their filenames.
 
+## Session notes and AI summaries
+
+Voice-activated recorders split one meeting, class, or site visit into many files. After each cycle, `bin/sessions.py` groups transcribed recordings whose gaps are shorter than `SESSION_GAP_MIN` (20 minutes by default) into a session and writes one note per session:
+
+```text
+2026-09-05 0900 session.md
+```
+
+The note has YAML front matter (`type: session`, recording count, duration, speech minutes), a `## Summary` section, a `## Recordings` list that links every transcript note with `[[wikilinks]]`, and a `## Combined transcript` that stitches all the recordings together in order. Without an API key the summary section holds a short hint and the combined transcript is the thing to paste into an AI model together with `prompts/session-summary.md`.
+
+With `OPENROUTER_API_KEY` set, the pipeline sends the ordered transcripts to the model named by `SESSION_SUMMARY_MODEL` (falling back to `OPENROUTER_MODEL`) using the bundled prompt, and writes the result into the summary section. Set `SESSION_SUBJECT` to the topic of your recordings so the model can fix misheard jargon and names, and pick a strong model for sessions even if the per-file `OPENROUTER_MODEL` stays small. Sessions longer than `MAP_WINDOW_CHARS` are summarized in windows and then merged. Set `FILE_SUMMARY=0` to keep only session summaries.
+
+A session is closed when its note is written. Recordings that arrive later start a new session, even if they would have fitted the gap rule. A session whose recordings are still being transcribed waits for the next cycle.
+
+Manual commands, run with the installed virtual environment:
+
+```bash
+PYTHON=~/.local/share/usb-audio-transcriber/venv/bin/python
+APP=~/.local/share/usb-audio-transcriber
+
+$PYTHON $APP/bin/sessions.py list                        # what has been written
+$PYTHON $APP/bin/sessions.py retry                       # add summaries to notes that lack one
+$PYTHON $APP/bin/sessions.py rebuild --date 2026-09-05   # forget and regenerate one day
+```
+
+`retry` is the command to run after adding an API key, or after a summary failed because the network or the provider was down. `rebuild` regroups a day from scratch, which is how to merge a late recording into the session it belongs to.
+
+To change the prompt, copy `prompts/session-summary.md` somewhere, edit it (keep the `{subject}` placeholder), and point `SESSION_PROMPT_FILE` at it.
+
 ## Manage model caches
 
 Run cache commands with the installed virtual environment:
