@@ -76,6 +76,9 @@ Diarization runs locally; the token is used only to download the gated models. K
 | `HEADLESS` | `auto` | `auto` shows the progress window only when a graphical session and `zenity` exist; `1` never shows it; `0` always tries |
 | `NOTIFY` | `auto` | Desktop notification when notes are ready, with click-to-open where `notify-send` supports actions; `1` always tries, `0` never |
 
+| `PANEL_BIND` | `127.0.0.1` | Address the control panel listens on; `0.0.0.0` allows other devices on your network, still behind the private link |
+| `PANEL_PORT` | `8765` | Port of the control panel |
+
 Headless machines also need `loginctl enable-linger "$USER"` so the user timer keeps running without a login session; the doctor warns when lingering is off.
 
 ## AI summaries

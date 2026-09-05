@@ -39,9 +39,18 @@ Prefer to read the code first? Clone the repository and run `./install.sh`; see 
 - **Desktop-friendly.** A progress window with a time estimate, and a notification you can click to open the finished note.
 - **Runs headless.** No desktop? Put it on a Raspberry Pi or a home server and let the notes land in a synced folder.
 - **Search everything from the terminal.** `search.py roof leak` finds every matching moment across all your recordings, newest first, with the timestamp and speaker.
+- **A control panel.** A window from your app menu, and from your phone if you like, with the pipeline's state, sessions with a Summarize button, search, and every setting as a form. Everything in it is also a terminal command.
 - **Pick your speed.** `fast` transcribed a 58-minute recording in about 17 minutes on a plain CPU. `accurate` is there for hard audio, and `both` gives you an A/B comparison from the same file.
 
 Good fits: lectures and classes, meetings and site visits, interviews, long phone calls on speaker, and voice memos you would otherwise never listen to again.
+
+## The control panel
+
+<p align="center">
+  <img src="docs/assets/panel-home.png" alt="The control panel's home screen: pipeline state, library counts, summary backend, Whisper models, recent recordings" width="100%">
+</p>
+
+Install adds a **USB Audio Transcriber** entry to your app menu. It opens the control panel: what the pipeline is doing right now, every session with a Summarize button that sends it to the AI tool you choose, search across everything, and every setting as a form with a "Find my Obsidian vault" button. It runs on your machine behind a private link, and each button maps to a script you could run yourself. Details in [the panel guide](docs/panel.md).
 
 ## Real-world test: a $50 recorder from Amazon
 
@@ -124,7 +133,7 @@ Either way, remember that pasting a transcript into a cloud AI sends its text to
 - Python 3.10+
 - `ffmpeg` for audio decoding
 - `git` for the one-line installer
-- Optional: `zenity` for the progress window, `libnotify-bin` for notifications
+- Optional: `zenity` for the progress window, `libnotify-bin` for notifications, a web browser for the control panel
 - Internet access the first time faster-whisper downloads the configured model
 
 On Ubuntu/Debian:
@@ -195,6 +204,7 @@ It checks configuration, required commands and Python packages, writable output 
 - `SESSION_GAP_MIN`: how long a silence has to be before a new session starts (20 minutes).
 - `DIARIZATION` and `HF_TOKEN`: optional speaker labels.
 - `HEADLESS` and `NOTIFY`: desktop window and notifications, `auto` by default.
+- `PANEL_BIND` and `PANEL_PORT`: where the control panel listens; `0.0.0.0` lets your phone open it.
 - `PURGE_DEVICE`: leave at `0` unless you explicitly want copied recordings removed from the USB device.
 
 ### Whisper model choices

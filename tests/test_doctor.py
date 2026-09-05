@@ -275,6 +275,11 @@ class DoctorSessionTests(unittest.TestCase):
                                                   SUMMARY_COMMAND="codex exec -")), [])
         self.assertEqual(doctor.check_config(base(SUMMARY_BACKEND="")), [])
 
+    def test_panel_port_is_validated(self):
+        self.assertIn("PANEL_PORT must be a number between 1 and 65535",
+                      doctor.check_config(self.base_config(PANEL_PORT="99999")))
+        self.assertEqual(doctor.check_config(self.base_config(PANEL_PORT="8765")), [])
+
     def test_bundled_prompt_needs_no_setting(self):
         self.assertEqual(doctor.check_config(self.base_config(SESSION_PROMPT_FILE="")), [])
 

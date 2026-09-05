@@ -38,6 +38,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 | `bin/transcribe.py` | Load configured faster-whisper model profiles, transcribe queued recordings, optionally summarize, and write notes |
 | `bin/sessions.py` | Group completed recordings into sessions by time gap, write session notes with wikilinks and a combined transcript, and optionally summarize the session |
 | `bin/search.py` | Full-text search over every transcript segment; keeps an FTS5 index in the state database fresh from the JSON sidecars |
+| `bin/panel.py`, `panel/index.html` | The control panel: a token-protected local web app whose every action runs one of the scripts above; `usb-audio-transcriber-panel.service` keeps it running and `share/` holds the app-menu entry and icon |
 | `bin/llm.py` | Shared OpenRouter client and text windowing used by per-file and session summaries |
 | `bin/diarize.py` | Optional pyannote speaker labelling: decode with ffmpeg, diarize, assign the best-overlapping speaker to each segment |
 | `prompts/session-summary.md` | Default session summary prompt; `{subject}` is filled from `SESSION_SUBJECT` |

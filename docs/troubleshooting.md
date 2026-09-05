@@ -84,6 +84,13 @@ $PYTHON $APP/bin/model-cache.py download fast
 
 Check free disk space and network access. For GPU configurations, verify that the selected `WHISPER_DEVICE` and `WHISPER_COMPUTE` are supported by the installed CTranslate2 stack. Switching back to `cpu` / `int8` is the conservative diagnostic baseline.
 
+## The control panel does not open
+
+- `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` starts one itself and prints the link.
+- "This panel needs its private link" means the browser has no token: open it from the app menu or with `bin/panel.py open` rather than by typing the address.
+- If the port is taken, change `PANEL_PORT` in `config.env` and restart the service.
+- Buttons that need systemd (run now, pause, resume) are disabled where systemd is not available.
+
 ## Search finds nothing
 
 - Run `search.py --index` once; the index is built from the JSON sidecars next to the archived audio, and only completed recordings are indexed.

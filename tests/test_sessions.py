@@ -338,6 +338,36 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("Done.", written[0].read_text(encoding="utf-8"))
             self.assertEqual([row[3] for row in fixture.rows()], [1])
 
+    def test_a_failed_rerun_keeps_the_existing_note(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key")
+            fixture.recording(at(9, 30), 30)
+            sessions = load_sessions(fixture.config)
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nFirst."):
+                written = fixture.run(sessions)
+            ident = fixture.rows()[0][0]
+
+            with mock.patch.object(sessions, "call_llm", side_effect=RuntimeError("tool missing")):
+                fixture.run(sessions, "summarize_selected", idents=[ident])
+
+            self.assertIn("First.", written[0].read_text(encoding="utf-8"))
+            self.assertEqual([row[3] for row in fixture.rows()], [1])
+
+    def test_manual_summarize_ignores_the_backfill_guard_and_the_automatic_switch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory), OPENROUTER_API_KEY="key",
+                              SESSION_BACKFILL_DAYS="7", SESSION_SUMMARY="0")
+            fixture.recording(datetime(2026, 8, 1, 9, 30), 30)
+            sessions = load_sessions(fixture.config)
+            fixture.run(sessions)
+            ident = fixture.rows()[0][0]
+            with mock.patch.object(sessions, "call_llm", return_value="## Executive summary\nAsked for.") as llm:
+                written = fixture.run(sessions, "summarize_selected", idents=[ident])
+
+            llm.assert_called_once()
+            self.assertIn("Asked for.", written[0].read_text(encoding="utf-8"))
+            self.assertEqual([row[3] for row in fixture.rows()], [1])
+
     def test_rebuild_regenerates_one_day(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory))

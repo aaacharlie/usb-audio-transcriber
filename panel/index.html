@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USB Audio Transcriber</title>
+<style>
+  :root {
+    --bg: #f4f6f9; --panel: #ffffff; --line: #e3e7ee; --text: #172033; --muted: #5b6b82;
+    --accent: #2563eb; --accent-text: #ffffff; --ok: #16a34a; --warn: #d97706; --bad: #dc2626;
+    --soft: #eef2f8; --mark: #fde68a; --code: #f1f5f9; --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a; --panel: #1e293b; --line: #2b3a52; --text: #e5e9f0; --muted: #9aa8bd;
+      --accent: #60a5fa; --accent-text: #0b1220; --soft: #24324a; --mark: #92400e; --code: #0b1220;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  button { font: inherit; }
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  nav.side { background: var(--panel); border-right: 1px solid var(--line); padding: 18px 14px;
+    display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; }
+  .brand svg { width: 36px; height: 36px; flex: none; }
+  .brand b { display: block; font-size: 15px; }
+  .brand small { color: var(--muted); font-size: 12px; }
+  nav.side button { text-align: left; border: 0; background: transparent; color: var(--text);
+    padding: 10px 12px; border-radius: 10px; cursor: pointer; font-weight: 500; }
+  nav.side button:hover { background: var(--soft); }
+  nav.side button.active { background: var(--accent); color: var(--accent-text); }
+  .pill { margin-top: auto; padding: 10px 12px; border-radius: 10px; background: var(--soft);
+    font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.busy { background: var(--accent); animation: pulse 1.2s infinite; }
+  .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: .35; } }
+  main { padding: 26px 30px 60px; max-width: 1180px; }
+  section.view { display: none; } section.view.active { display: block; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0; } h2 { font-size: 16px; margin: 0 0 10px; }
+  h3 { font-size: 14px; margin: 18px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .muted { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .card .big { font-size: 26px; font-weight: 650; margin: 4px 0 2px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+  .kv span:first-child { color: var(--muted); }
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 8px 14px;
+    border-radius: 9px; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  .btn.danger { color: var(--bad); }
+  .btn.small { padding: 5px 10px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tr:last-child td { border-bottom: 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--soft); }
+  .tag.ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .tag.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .tag.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+  input[type=text], input[type=password], input[type=number], input[type=date], select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+    color: var(--text); font: inherit; }
+  textarea { min-height: 70px; }
+  .field { margin: 10px 0 14px; } .field label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+  .field .help { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    overflow: auto; font-size: 12.5px; max-height: 420px; white-space: pre-wrap; }
+  mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 2px; }
+  .drawer { position: fixed; inset: 0 0 0 auto; width: min(760px, 100%); background: var(--panel);
+    border-left: 1px solid var(--line); box-shadow: -20px 0 50px rgba(0,0,0,.25); transform: translateX(105%);
+    transition: transform .2s; display: flex; flex-direction: column; z-index: 20; }
+  .drawer.open { transform: none; }
+  .drawer header { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .drawer .body { padding: 18px 22px; overflow: auto; }
+  .note h1 { font-size: 20px; } .note h2 { font-size: 16px; margin-top: 18px; } .note h3 { text-transform: none; letter-spacing: 0; color: var(--text); }
+  .note .fm { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12.5px; color: var(--muted);
+    background: var(--soft); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+  .note p { margin: 6px 0; } .note a.wiki { cursor: pointer; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; }
+  .toast.show { opacity: 1; }
+  .job { border-top: 1px solid var(--line); padding: 8px 0; font-size: 14px; }
+  .job:first-child { border-top: 0; }
+  .job summary { cursor: pointer; }
+  .failures { color: var(--bad); }
+  .hint { font-size: 13px; color: var(--muted); }
+  @media (max-width: 820px) {
+    .app { grid-template-columns: 1fr; }
+    nav.side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); }
+    .brand { width: 100%; padding-bottom: 6px; } .pill { margin: 0; width: 100%; }
+    main { padding: 18px 14px 50px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side">
+    <div class="brand">
+      <svg viewBox="0 0 128 128" aria-hidden="true"><rect width="128" height="128" rx="28" fill="#0f172a"/><rect x="42" y="18" width="44" height="66" rx="16" fill="#f59e0b"/><rect x="52" y="30" width="24" height="26" rx="5" fill="#0f172a" opacity=".55"/><circle cx="64" cy="70" r="6" fill="#ef4444"/><path d="M30 60v10a34 34 0 0 0 68 0V60" fill="none" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/><path d="M64 104v12M46 116h36" fill="none" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/></svg>
+      <div><b>USB Audio Transcriber</b><small id="version">control panel</small></div>
+    </div>
+    <button data-view="home" class="active">Home</button>
+    <button data-view="sessions">Sessions</button>
+    <button data-view="recordings">Recordings</button>
+    <button data-view="search">Search</button>
+    <button data-view="settings">Settings</button>
+    <button data-view="tools">Tools</button>
+    <div class="pill"><span class="dot" id="status-dot"></span><span id="status-text">Connecting</span></div>
+  </nav>
+
+  <main>
+    <section class="view active" id="view-home">
+      <div class="head">
+        <h1>Home</h1>
+        <div class="row">
+          <button class="btn" id="btn-pause">Pause automatic runs</button>
+          <button class="btn primary" id="btn-cycle">Run a cycle now</button>
+        </div>
+      </div>
+      <div class="grid" id="home-cards"></div>
+      <h3>Recent recordings</h3>
+      <div id="home-recordings"></div>
+      <h3>Activity</h3>
+      <div class="card" id="jobs-home"><span class="muted">Nothing running.</span></div>
+    </section>
+
+    <section class="view" id="view-sessions">
+      <div class="head">
+        <h1>Sessions</h1>
+        <div class="row">
+          <select id="backend-pick" style="width:auto"></select>
+          <button class="btn" id="btn-retry">Summarize all without a summary</button>
+          <button class="btn primary" id="btn-summarize">Summarize selected</button>
+        </div>
+      </div>
+      <p class="hint">A session is one sitting: recordings less than a few minutes apart, stitched into one note. Summarizing sends that note's combined transcript to the backend you pick above.</p>
+      <div id="sessions-table"></div>
+    </section>
+
+    <section class="view" id="view-recordings">
+      <div class="head"><h1>Recordings</h1><button class="btn" id="btn-recordings-refresh">Refresh</button></div>
+      <div id="recordings-table"></div>
+    </section>
+
+    <section class="view" id="view-search">
+      <div class="head"><h1>Search</h1></div>
+      <form id="search-form" class="row">
+        <input type="text" id="q" placeholder="Words to find, for example: roof leak" style="flex:1; min-width: 220px">
+        <input type="date" id="since" style="width:auto" title="On or after">
+        <input type="text" id="speaker" placeholder="Speaker label" style="width:150px">
+        <button class="btn primary" type="submit">Search</button>
+      </form>
+      <p class="hint">Every word must match. Add * for a prefix (plumb*). Newest recordings first.</p>
+      <div id="search-results"></div>
+    </section>
+
+    <section class="view" id="view-settings">
+      <div class="head">
+        <h1>Settings</h1>
+        <div class="row">
+          <button class="btn" id="btn-vault">Find my Obsidian vault</button>
+          <button class="btn" id="btn-test-backend">Test summary backend</button>
+          <button class="btn primary" id="btn-save">Save</button>
+        </div>
+      </div>
+      <p class="hint" id="settings-path"></p>
+      <div id="settings-form"></div>
+      <div id="settings-result"></div>
+    </section>
+
+    <section class="view" id="view-tools">
+      <div class="head"><h1>Tools</h1></div>
+      <div class="grid">
+        <div class="card">
+          <h2>Doctor</h2>
+          <p class="hint">Checks the configuration, commands, packages, folders, and services.</p>
+          <button class="btn" data-job="doctor">Run the doctor</button>
+        </div>
+        <div class="card">
+          <h2>Search index</h2>
+          <p class="hint">Rebuilt every cycle; refresh by hand after copying notes around.</p>
+          <button class="btn" data-job="index">Refresh the index</button>
+        </div>
+        <div class="card">
+          <h2>Whisper models</h2>
+          <div class="row">
+            <select id="cache-profile" style="width:auto"><option value="fast">fast</option><option value="accurate">accurate</option><option value="both">both</option></select>
+            <button class="btn small" data-cache="status">Status</button>
+            <button class="btn small" data-cache="download">Download</button>
+            <button class="btn small danger" data-cache="remove">Remove</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Rebuild a day's sessions</h2>
+          <div class="row"><input type="date" id="rebuild-date" style="width:auto"><button class="btn" id="btn-rebuild">Rebuild</button></div>
+          <p class="hint">Forgets the sessions that started on that day and regroups them, for example to fold in a late recording.</p>
+        </div>
+        <div class="card">
+          <h2>Another device</h2>
+          <p class="hint">To open this panel from your phone, set "Panel listens on" to 0.0.0.0 in Settings and run <code>bin/panel.py url</code> in a terminal for the private link.</p>
+        </div>
+      </div>
+      <h3>Log</h3>
+      <div class="row" style="margin-bottom:8px"><button class="btn small" id="btn-log">Refresh log</button></div>
+      <pre id="log">Press refresh.</pre>
+      <h3>Activity</h3>
+      <div class="card" id="jobs-tools"><span class="muted">Nothing running.</span></div>
+    </section>
+  </main>
+</div>
+
+<div class="drawer" id="drawer">
+  <header><b id="drawer-title">Note</b>
+    <div class="row"><button class="btn small" id="drawer-open">Open in your editor</button><button class="btn small" id="drawer-close">Close</button></div>
+  </header>
+  <div class="body note" id="drawer-body"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const state = { status: null, jobs: [], sessions: [], settings: null, pollJobs: false };
+
+  async function api(path, options) {
+    const opts = Object.assign({ headers: {} }, options || {});
+    opts.headers["X-Requested-With"] = "panel";
+    if (opts.body && typeof opts.body !== "string") {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(opts.body);
+    }
+    const reply = await fetch(path, opts);
+    const data = await reply.json().catch(() => ({}));
+    if (!reply.ok && !(reply.status === 400 && data.failures)) {
+      throw new Error(data.error || (reply.status + " " + reply.statusText));
+    }
+    return data;
+  }
+  function toast(text) {
+    const el = $("toast"); el.textContent = text; el.classList.add("show");
+    clearTimeout(el.timer); el.timer = setTimeout(() => el.classList.remove("show"), 2600);
+  }
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const when = (iso) => iso ? iso.replace("T", " ").slice(0, 16) : "";
+
+  // ---------------------------------------------------------------- navigation
+  document.querySelectorAll("nav.side button[data-view]").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
+  function show(view) {
+    document.querySelectorAll("nav.side button[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+    document.querySelectorAll("section.view").forEach((s) => s.classList.toggle("active", s.id === "view-" + view));
+    if (view === "sessions") loadSessions();
+    if (view === "recordings") loadRecordings("recordings-table");
+    if (view === "settings" && !state.settings) loadSettings();
+  }
+
+  // ---------------------------------------------------------------- status
+  async function refreshStatus() {
+    try { state.status = await api("/api/status"); } catch (e) { setPill("bad", "Panel unreachable"); return; }
+    const s = state.status, p = s.progress || {};
+    $("version").textContent = "control panel " + (s.version || "");
+    const timer = s.units && s.units.timer;
+    const paused = timer && timer.active !== "active";
+    if (p.active) setPill("busy", (p.phase || "Working") + (p.current_percent != null ? " " + p.current_percent + "%" : ""));
+    else if (s.systemd && paused) setPill("warn", "Automatic runs paused");
+    else setPill("ok", "Idle, watching for the recorder");
+    $("btn-pause").textContent = paused ? "Resume automatic runs" : "Pause automatic runs";
+    $("btn-pause").disabled = !s.systemd;
+    renderHome();
+  }
+  function setPill(kind, text) { $("status-dot").className = "dot " + kind; $("status-text").textContent = text; }
+
+  function unitTag(u) {
+    if (!u) return '<span class="tag">no systemd</span>';
+    const ok = u.active === "active" || u.active === "activating";
+    return `<span class="tag ${ok ? "ok" : "warn"}">${esc(u.active)}</span> <span class="tag">${esc(u.enabled)}</span>`;
+  }
+  function renderHome() {
+    const s = state.status; if (!s) return;
+    const p = s.progress || {};
+    const cards = [];
+    cards.push(`<div class="card"><h2>Pipeline</h2><div class="kv">
+      <span>Timer</span><span>${unitTag(s.units.timer)}</span>
+      <span>Plug-in trigger</span><span>${unitTag(s.units.plug)}</span>
+      <span>Last activity</span><span>${esc(when(p.updated_at)) || "never"}</span>
+      <span>Phase</span><span>${esc(p.phase || "idle")}</span>
+      <span>Queued</span><span>${s.queued}</span>
+      <span>On the recorder</span><span>${s.detected == null ? "?" : s.detected + " file(s)"}</span>
+    </div></div>`);
+    cards.push(`<div class="card"><h2>Library</h2><div class="big">${s.counts.recordings}</div><span class="muted">recordings</span>
+      <div class="kv" style="margin-top:8px"><span>Sessions</span><span>${s.counts.sessions}</span><span>With a summary</span><span>${s.counts.summarized}</span></div></div>`);
+    cards.push(`<div class="card"><h2>AI summaries</h2><div class="kv">
+      <span>Backend</span><span>${esc(s.summaries.backend)} ${s.summaries.ready ? '<span class="tag ok">ready</span>' : '<span class="tag warn">off</span>'}</span>
+      <span>Subject</span><span>${esc(s.summaries.subject) || '<span class="muted">not set</span>'}</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn small" data-job="test-backend">Test</button><button class="btn small" data-goto="settings">Change</button></div></div>`);
+    const models = s.models.map((m) => `<span>${esc(m.key)}</span><span>${m.cached ? m.gib + " GiB cached" : "not downloaded"}</span>`).join("");
+    cards.push(`<div class="card"><h2>Whisper</h2><div class="kv"><span>Profile</span><span>${esc(s.profile)}</span>${models}</div>
+      ${s.disk ? `<div class="kv" style="margin-top:8px"><span>Disk free</span><span>${s.disk.free_gib} of ${s.disk.total_gib} GiB</span></div>` : ""}</div>`);
+    cards.push(`<div class="card"><h2>Notes</h2><div class="kv"><span>Folder</span><span style="word-break:break-all">${esc(s.vault)}</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn small" data-open="${esc(s.vault)}">Open folder</button></div></div>`);
+    $("home-cards").innerHTML = cards.join("");
+  }
+
+  // ---------------------------------------------------------------- recordings
+  async function loadRecordings(target) {
+    let rows;
+    try { rows = await api("/api/recordings"); } catch (e) { $(target).innerHTML = `<p class="failures">${esc(e.message)}</p>`; return; }
+    if (!rows.length) { $(target).innerHTML = '<div class="card muted">No recordings yet. Plug in the recorder.</div>'; return; }
+    const limit = target === "home-recordings" ? 8 : rows.length;
+    $(target).innerHTML = `<table><tr><th>Recording</th><th>Imported</th><th>Status</th><th>Note</th></tr>` +
+      rows.slice(0, limit).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(when(r.imported_at))}</td>
+        <td>${r.complete ? '<span class="tag ok">transcribed</span>' : '<span class="tag warn">waiting</span>'}</td>
+        <td>${r.note ? `<a class="wiki" data-note="${esc(r.note)}">${esc(r.note_name)}</a>` : ""}</td></tr>`).join("") + "</table>";
+  }
+
+  // ---------------------------------------------------------------- sessions
+  async function loadSessions() {
+    try { state.sessions = await api("/api/sessions"); } catch (e) { $("sessions-table").innerHTML = `<p class="failures">${esc(e.message)}</p>`; return; }
+    if (!state.sessions.length) { $("sessions-table").innerHTML = '<div class="card muted">No sessions yet. They appear after the first transcribed recordings.</div>'; return; }
+    $("sessions-table").innerHTML = `<table><tr><th><input type="checkbox" id="check-all"></th><th>Session</th><th>Recordings</th><th>Summary</th><th></th></tr>` +
+      state.sessions.map((s) => `<tr>
+        <td><input type="checkbox" class="pick" value="${esc(s.id)}"></td>
+        <td><b>${esc(when(s.started_at))}</b> to ${esc((s.ended_at || "").slice(11, 16))}<br><span class="muted">${esc(s.note_name || "")}</span></td>
+        <td>${s.recordings}</td>
+        <td>${s.summarized ? `<span class="tag ok">yes</span> <span class="muted">${esc(s.summary_model || "")}</span>` : '<span class="tag">none yet</span>'}</td>
+        <td class="row"><button class="btn small" data-note="${esc(s.note || "")}" ${s.note_exists ? "" : "disabled"}>View</button>
+            <button class="btn small" data-summarize="${esc(s.id)}">Summarize</button></td></tr>`).join("") + "</table>";
+    $("check-all").addEventListener("change", (e) => document.querySelectorAll(".pick").forEach((c) => c.checked = e.target.checked));
+  }
+  function backendChoice() { return $("backend-pick").value; }
+  function fillBackendPicker() {
+    const configured = state.status ? state.status.summaries.backend : "";
+    $("backend-pick").innerHTML = [["", "Configured backend (" + (configured || "none") + ")"], ["command", "Command-line tool (Codex, Claude Code, ...)"], ["openai", "Local model (Ollama)"], ["openrouter", "OpenRouter"]]
+      .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+  }
+  $("btn-summarize").addEventListener("click", () => {
+    const ids = [...document.querySelectorAll(".pick:checked")].map((c) => c.value);
+    if (!ids.length) return toast("Tick at least one session first.");
+    startJob("summarize", { ids, backend: backendChoice() });
+  });
+  $("btn-retry").addEventListener("click", () => startJob("retry", { backend: backendChoice() }));
+
+  // ---------------------------------------------------------------- search
+  $("search-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = $("q").value.trim(); if (!q) return;
+    $("search-results").innerHTML = '<p class="muted">Searching...</p>';
+    const params = new URLSearchParams({ q, since: $("since").value, speaker: $("speaker").value.trim() });
+    let hits;
+    try { hits = await api("/api/search?" + params); } catch (err) { $("search-results").innerHTML = `<p class="failures">${esc(err.message)}</p>`; return; }
+    if (!hits.length) { $("search-results").innerHTML = '<div class="card muted">No matches.</div>'; return; }
+    $("search-results").innerHTML = `<table><tr><th>Recording</th><th>At</th><th>Text</th></tr>` + hits.map((h) => {
+      const label = h.note ? h.note.split("/").pop().replace(/\.md$/, "") : h.audio.split("/").pop();
+      const text = esc(h.text).replace(/\[([^\]]+)\]/g, "<mark>$1</mark>");
+      const stamp = new Date(1000 * (h.start_seconds || 0)).toISOString().substr(11, 8);
+      return `<tr><td><a class="wiki" data-note="${esc(h.note || "")}">${esc(label)}</a></td><td>${stamp}</td><td>${h.speaker ? "<b>" + esc(h.speaker) + ":</b> " : ""}${text}</td></tr>`;
+    }).join("") + "</table>";
+  });
+
+  // ---------------------------------------------------------------- settings
+  async function loadSettings() {
+    try { state.settings = await api("/api/config"); } catch (e) { $("settings-form").innerHTML = `<p class="failures">${esc(e.message)}</p>`; return; }
+    const { settings, values, path } = state.settings;
+    $("settings-path").textContent = "Saved to " + path + ". Changes apply on the next cycle.";
+    $("settings-form").innerHTML = settings.map((section) => `<div class="card" style="margin-bottom:14px"><h2>${esc(section.title)}</h2>` +
+      section.fields.map((f) => field(f, values[f.key] || "")).join("") + "</div>").join("");
+  }
+  function field(f, value) {
+    const id = "f-" + f.key;
+    let control;
+    if (f.type === "bool") control = `<select id="${id}" data-key="${f.key}"><option value="1" ${value === "1" ? "selected" : ""}>On</option><option value="0" ${value !== "1" ? "selected" : ""}>Off</option></select>`;
+    else if (f.type === "choice") control = `<select id="${id}" data-key="${f.key}">${f.choices.map((c) => `<option value="${esc(c)}" ${c === value ? "selected" : ""}>${c === "" ? "(automatic)" : esc(c)}</option>`).join("")}</select>`;
+    else if (f.type === "secret") control = `<input type="password" id="${id}" data-key="${f.key}" value="${esc(value)}" placeholder="${value ? "saved" : "not set"}" autocomplete="off">`;
+    else if (f.type === "int") control = `<input type="number" id="${id}" data-key="${f.key}" value="${esc(value)}">`;
+    else control = `<input type="text" id="${id}" data-key="${f.key}" value="${esc(value)}">`;
+    return `<div class="field"><label for="${id}">${esc(f.label)} <span class="muted" style="font-weight:400">${esc(f.key)}</span></label>${control}${f.help ? `<div class="help">${esc(f.help)}</div>` : ""}</div>`;
+  }
+  $("btn-save").addEventListener("click", async () => {
+    const values = {};
+    document.querySelectorAll("#settings-form [data-key]").forEach((el) => values[el.dataset.key] = el.value);
+    $("settings-result").innerHTML = "";
+    let reply;
+    try { reply = await api("/api/config", { method: "POST", body: { values } }); } catch (e) { $("settings-result").innerHTML = `<p class="failures">${esc(e.message)}</p>`; return; }
+    if (reply.failures) { $("settings-result").innerHTML = `<div class="card"><b class="failures">Not saved. The doctor found:</b><ul>${reply.failures.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>`; return; }
+    toast("Settings saved."); state.settings = null; loadSettings(); refreshStatus();
+  });
+  $("btn-vault").addEventListener("click", async () => {
+    let vaults;
+    try { vaults = await api("/api/vaults"); } catch (e) { return toast(e.message); }
+    if (!vaults.length) return toast("No Obsidian vault found on this machine.");
+    const pick = vaults.length === 1 ? vaults[0] : prompt("Vaults found:\n" + vaults.map((v, i) => (i + 1) + ". " + v).join("\n") + "\n\nType the number to use:", "1");
+    const vault = vaults.length === 1 ? pick : vaults[parseInt(pick, 10) - 1];
+    if (!vault) return;
+    const el = document.querySelector('[data-key="VAULT_DIR"]'); if (el) { el.value = vault.replace(/\/$/, "") + "/Recordings"; toast("Notes folder set to a Recordings folder in that vault. Save to apply."); }
+  });
+  $("btn-test-backend").addEventListener("click", () => startJob("test-backend", {}));
+
+  // ---------------------------------------------------------------- jobs and actions
+  async function startJob(kind, params) {
+    try { await api("/api/jobs", { method: "POST", body: { kind, params } }); } catch (e) { return toast(e.message); }
+    toast("Started."); state.pollJobs = true; pollJobs();
+  }
+  async function pollJobs() {
+    try { state.jobs = await api("/api/jobs"); } catch (e) { return; }
+    renderJobs();
+    const running = state.jobs.some((j) => j.status === "running");
+    if (running) setTimeout(pollJobs, 2000);
+    else { state.pollJobs = false; if (document.querySelector("#view-sessions.active")) loadSessions(); refreshStatus(); }
+  }
+  function renderJobs() {
+    const html = state.jobs.length ? state.jobs.map((j) => `<details class="job" ${j.status === "running" ? "" : ""}>
+      <summary><span class="tag ${j.status === "done" ? "ok" : j.status === "failed" ? "bad" : ""}">${esc(j.status)}</span> ${esc(j.label)} <span class="muted">${esc(when(j.started))}</span></summary>
+      <pre>${esc(j.output || (j.status === "running" ? "Running..." : "(no output)"))}</pre></details>`).join("") : '<span class="muted">Nothing running.</span>';
+    $("jobs-home").innerHTML = html; $("jobs-tools").innerHTML = html;
+  }
+  $("btn-cycle").addEventListener("click", () => startJob("cycle", {}));
+  $("btn-pause").addEventListener("click", () => {
+    const timer = state.status && state.status.units.timer;
+    startJob("timer", { action: timer && timer.active === "active" ? "pause" : "resume" });
+  });
+  $("btn-rebuild").addEventListener("click", () => { const d = $("rebuild-date").value; if (!d) return toast("Pick a date."); startJob("rebuild", { date: d }); });
+  $("btn-log").addEventListener("click", async () => { try { $("log").textContent = (await api("/api/log?lines=300")).text || "(empty)"; } catch (e) { $("log").textContent = e.message; } });
+  $("btn-recordings-refresh").addEventListener("click", () => loadRecordings("recordings-table"));
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-job],[data-cache],[data-goto],[data-open],[data-note],[data-summarize]");
+    if (!t) return;
+    if (t.dataset.job) startJob(t.dataset.job, {});
+    else if (t.dataset.cache) startJob("model-cache", { action: t.dataset.cache, profile: $("cache-profile").value });
+    else if (t.dataset.goto) show(t.dataset.goto);
+    else if (t.dataset.open) openPath(t.dataset.open);
+    else if (t.dataset.summarize) startJob("summarize", { ids: [t.dataset.summarize], backend: backendChoice() });
+    else if (t.dataset.note !== undefined) { if (t.dataset.note) viewNote(t.dataset.note); }
+  });
+  async function openPath(path) {
+    try { const r = await api("/api/open", { method: "POST", body: { path } }); toast(r.ok ? "Opened." : (r.error || "Could not open.")); } catch (e) { toast(e.message); }
+  }
+
+  // ---------------------------------------------------------------- note viewer
+  let currentNote = null;
+  async function viewNote(path) {
+    let note;
+    try { note = await api("/api/note?path=" + encodeURIComponent(path)); } catch (e) { return toast(e.message); }
+    currentNote = note.path;
+    $("drawer-title").textContent = note.path.split("/").pop();
+    $("drawer-body").innerHTML = markdown(note.text);
+    $("drawer").classList.add("open");
+  }
+  $("drawer-close").addEventListener("click", () => $("drawer").classList.remove("open"));
+  $("drawer-open").addEventListener("click", () => currentNote && openPath(currentNote));
+  function markdown(text) {
+    const lines = text.split("\n"); let html = "", i = 0, list = false;
+    if (lines[0] === "---") {
+      const fm = []; i = 1;
+      while (i < lines.length && lines[i] !== "---") { const [k, ...v] = lines[i].split(":"); fm.push(`<span>${esc(k)}</span><span>${esc(v.join(":").trim())}</span>`); i++; }
+      i++; html += `<div class="fm">${fm.join("")}</div>`;
+    }
+    const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[\[([^\]]+)\]\]/g, (m, n) => `<a class="wiki" data-wiki="${esc(n)}">${esc(n)}</a>`).replace(/`([^`]+)`/g, "<code>$1</code>");
+    for (; i < lines.length; i++) {
+      const line = lines[i];
+      const h = line.match(/^(#{1,3})\s+(.*)/);
+      if (list && !line.startsWith("- ")) { html += "</ul>"; list = false; }
+      if (h) html += `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`;
+      else if (line.startsWith("- ")) { if (!list) { html += "<ul>"; list = true; } html += `<li>${inline(line.slice(2))}</li>`; }
+      else if (line.trim() === "---") html += "<hr>";
+      else if (line.startsWith("> ")) html += `<p class="hint">${inline(line.slice(2))}</p>`;
+      else if (line.trim()) html += `<p>${inline(line)}</p>`;
+    }
+    if (list) html += "</ul>";
+    return html;
+  }
+  document.addEventListener("click", (e) => {
+    const w = e.target.closest("[data-wiki]"); if (!w) return;
+    const vault = state.status ? state.status.vault : "";
+    viewNote(vault.replace(/\/$/, "") + "/" + w.dataset.wiki + ".md");
+  });
+
+  // ---------------------------------------------------------------- boot
+  refreshStatus().then(() => { fillBackendPicker(); loadRecordings("home-recordings"); pollJobs(); });
+  setInterval(refreshStatus, 4000);
+})();
+</script>
+</body>
+</html>

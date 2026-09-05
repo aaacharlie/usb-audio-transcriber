@@ -95,6 +95,14 @@ def check_config(config):
             failures.append("LLM_BASE_URL must start with http:// or https://")
     if backend == "command" and not config.get("SUMMARY_COMMAND", "").strip():
         failures.append("SUMMARY_BACKEND=command needs SUMMARY_COMMAND")
+    port = config.get("PANEL_PORT", "").strip()
+    if port:
+        try:
+            valid = 1 <= int(port) <= 65535
+        except ValueError:
+            valid = False
+        if not valid:
+            failures.append("PANEL_PORT must be a number between 1 and 65535")
     backfill = config.get("SESSION_BACKFILL_DAYS", "7").strip()
     if backfill:
         try:
@@ -273,6 +281,7 @@ def main(argv=None):
             for kind, unit in (
                 ("timer", "usb-audio-transcriber.timer"),
                 ("plug-in trigger", "usb-audio-transcriber-plug.path"),
+                ("control panel", "usb-audio-transcriber-panel.service"),
             ):
                 for operation in ("is-enabled", "is-active"):
                     ok, detail = systemd_state(unit, operation)

@@ -276,11 +276,26 @@ def render_note(members, summary_md, summary_status, ident):
     return "\n".join(lines)
 
 
-def build_summary(members, force=False):
-    """Return (markdown, status): ok, failed, disabled, no_backend, or backfill."""
+def use_backend(name):
+    """Switch the summary backend for this run (the panel's per-run choice)."""
+    global BACKEND, SUMMARY_MODEL, SUMMARIZE
+    config = dict(CFG)
+    config["SUMMARY_BACKEND"] = name
+    BACKEND = backend_from_config(
+        config, model_override=CFG.get("SESSION_SUMMARY_MODEL", "").strip() or None)
+    SUMMARY_MODEL = BACKEND.describe() if BACKEND else "none"
+    SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and BACKEND is not None
+
+
+def build_summary(members, force=False, manual=False):
+    """Return (markdown, status): ok, failed, disabled, no_backend, or backfill.
+
+    `force` ignores the backfill age limit; `manual` also ignores
+    SESSION_SUMMARY=0, because a person asked for this one explicitly.
+    """
     if BACKEND is None:
         return None, "no_backend"
-    if not SUMMARIZE:
+    if not SUMMARIZE and not manual:
         return None, "disabled"
     if not force and BACKFILL is not None:
         ended = max(member["end"] for member in members)
@@ -293,12 +308,16 @@ def build_summary(members, force=False):
         return str(exc), "failed"
 
 
-def write_session(con, members, note=None, force=False):
+def write_session(con, members, note=None, force=False, manual=False):
     ident = session_id(members)
     start = min(member["start"] for member in members)
     end = max(member["end"] for member in members)
-    summary_md, status = build_summary(members, force)
+    summary_md, status = build_summary(members, force, manual)
     VAULT.mkdir(parents=True, exist_ok=True)
+    if status == "failed" and note is not None and note.exists():
+        # A re-run that fails must not replace a note that already has a summary.
+        log(f"  keeping the existing note unchanged: {note.name}")
+        return note
     note = note or unique_note_path(start)
     write_private_text(note, render_note(members, summary_md, status, ident))
     con.execute(
@@ -359,6 +378,26 @@ def retry(con):
     return written
 
 
+def summarize_selected(con, idents):
+    """Summarize chosen sessions now, rewriting their notes in place."""
+    written = []
+    for ident in idents:
+        row = con.execute("SELECT members, note FROM sessions WHERE id=?", (ident,)).fetchone()
+        if not row:
+            log(f"  session {ident}: not found")
+            continue
+        members_json, note = row
+        digests = set(json.loads(members_json))
+        members = load_recordings(con, digests)
+        if len(members) != len(digests) or not all(m["complete"] for m in members):
+            log(f"  session {ident}: recordings missing or incomplete, skipping")
+            continue
+        written.append(write_session(con, members, note=Path(note), force=True, manual=True))
+    if not written:
+        log("No sessions were summarized.")
+    return written
+
+
 def rebuild(con, date):
     """Forget the sessions that started on a date and regenerate them."""
     rows = con.execute(
@@ -390,13 +429,13 @@ def test_backend():
 
 def list_sessions(con):
     rows = con.execute(
-        "SELECT started_at, ended_at, members, summarized, note FROM sessions "
+        "SELECT started_at, ended_at, members, summarized, note, id FROM sessions "
         "ORDER BY started_at"
     ).fetchall()
-    for started, ended, members, summarized, note in rows:
+    for started, ended, members, summarized, note, ident in rows:
         count = len(json.loads(members))
         print(f"{started} to {ended[11:16]}  {count:2} recording(s)  "
-              f"summary: {'yes' if summarized else 'no'}  {Path(note).name}")
+              f"summary: {'yes' if summarized else 'no'}  {Path(note).name}  id={ident}")
     if not rows:
         print("No session notes yet.")
     return rows
@@ -405,11 +444,20 @@ def list_sessions(con):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", default="auto",
-                        choices=("auto", "list", "retry", "rebuild", "test-backend"))
+                        choices=("auto", "list", "retry", "rebuild", "summarize",
+                                 "test-backend"))
     parser.add_argument("--date", help="YYYY-MM-DD, required for rebuild")
+    parser.add_argument("--id", action="append", default=[], metavar="SESSION_ID",
+                        help="session to summarize (repeatable); ids are in `list`")
+    parser.add_argument("--backend", choices=("command", "openai", "openrouter"),
+                        help="use this summary backend for this run only")
     args = parser.parse_args(argv)
     if args.command == "rebuild" and not args.date:
         parser.error("rebuild needs --date YYYY-MM-DD")
+    if args.command == "summarize" and not args.id:
+        parser.error("summarize needs at least one --id")
+    if args.backend:
+        use_backend(args.backend)
     if args.command == "auto" and not ENABLED:
         log("Session notes are disabled (SESSION_NOTES=0).")
         return 0
@@ -425,6 +473,8 @@ def main(argv=None):
             list_sessions(con)
         elif args.command == "retry":
             retry(con)
+        elif args.command == "summarize":
+            summarize_selected(con, args.id)
         else:
             rebuild(con, args.date)
     finally:

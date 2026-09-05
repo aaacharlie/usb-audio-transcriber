@@ -2,7 +2,7 @@
 
 ## Normal workflow
 
-1. Install the project with the one-line installer from the README (or `git clone` and `./install.sh`). On a fresh install the setup wizard asks where notes should go and offers your Obsidian vaults; run `bin/setup.py` again any time to change it. Re-running the same one-liner later updates the installation.
+1. Install the project with the one-line installer from the README (or `git clone` and `./install.sh`). On a fresh install the setup wizard asks where notes should go, offers your Obsidian vaults, and asks how summaries should be made; change any of it later in the [control panel](panel.md) (the "USB Audio Transcriber" entry in your app menu) or by running `bin/setup.py` again. Re-running the same one-liner later updates the installation.
 2. Keep `usb-audio-transcriber.timer` enabled.
 3. Mount or plug in removable media containing audio directly inside the configured recorder directory, `RECORD` by default.
 4. A cycle starts a few seconds after the drive mounts (the plug-in trigger watches the mount folders). The timer is the fallback and scans about once a minute, which also covers folders in `WATCH_DIRS`.

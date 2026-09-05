@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=USB Audio Transcriber
+Comment=Transcripts, session summaries, search, and settings for your voice recorder pipeline
+Exec="@INSTALL_ROOT@/venv/bin/python" "@INSTALL_ROOT@/bin/panel.py" open
+Icon=usb-audio-transcriber
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+Keywords=transcribe;whisper;recorder;notes;obsidian;
+StartupNotify=false
