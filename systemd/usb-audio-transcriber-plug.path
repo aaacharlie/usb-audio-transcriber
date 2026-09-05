@@ -1,0 +1,13 @@
+[Unit]
+Description=Start a transcription cycle when removable media is mounted
+
+[Path]
+# udisks creates the mount point under one of these roots when a drive is
+# plugged in; systemd watches the nearest existing parent until it appears.
+PathChanged=/media/%u
+PathChanged=/run/media/%u
+PathChanged=/mnt
+Unit=usb-audio-transcriber-plug.service
+
+[Install]
+WantedBy=default.target

@@ -5,7 +5,7 @@
 1. Install and configure the project.
 2. Keep `usb-audio-transcriber.timer` enabled.
 3. Mount or plug in removable media containing audio directly inside the configured recorder directory, `RECORD` by default.
-4. Wait for the next scan, normally within about one minute.
+4. A cycle starts a few seconds after the drive mounts (the plug-in trigger watches the mount folders). The timer is the fallback and scans about once a minute, which also covers folders in `WATCH_DIRS`.
 5. Watch the Zenity window for detected files, active file/model, percentage, and estimated time remaining.
 6. A desktop notification announces finished notes. Click it to open the note, or the transcript folder when several notes were written.
 7. Open the configured transcript directory after completion.

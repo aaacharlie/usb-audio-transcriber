@@ -43,18 +43,22 @@ cp "$SOURCE_ROOT/config.example.env" "$INSTALL_ROOT/config.example.env"
 chmod +x "$INSTALL_ROOT/bin/run-cycle.sh" "$INSTALL_ROOT/bin/model-cache.py" \
   "$INSTALL_ROOT/bin/benchmark-models.py" "$INSTALL_ROOT/bin/doctor.py"
 
-service=$(<"$SOURCE_ROOT/systemd/$APP_NAME.service")
 # systemd expands % specifiers in unit files, and an unquoted patsub
 # replacement expands & on bash 5.2+, so escape/quote both.
 rendered_root="${INSTALL_ROOT//\%/%%}"
-printf '%s\n' "${service//@INSTALL_ROOT@/"$rendered_root"}" \
-  > "$UNIT_DIR/$APP_NAME.service"
+for unit in "$APP_NAME.service" "$APP_NAME-plug.service"; do
+  template=$(<"$SOURCE_ROOT/systemd/$unit")
+  printf '%s\n' "${template//@INSTALL_ROOT@/"$rendered_root"}" > "$UNIT_DIR/$unit"
+done
 cp "$SOURCE_ROOT/systemd/$APP_NAME.timer" "$UNIT_DIR/$APP_NAME.timer"
+cp "$SOURCE_ROOT/systemd/$APP_NAME-plug.path" "$UNIT_DIR/$APP_NAME-plug.path"
 systemctl --user daemon-reload
 systemctl --user enable --now "$APP_NAME.timer"
+systemctl --user enable --now "$APP_NAME-plug.path"
 
 cat <<EOF
 Installed $APP_NAME to $INSTALL_ROOT
 Timer status: systemctl --user status $APP_NAME.timer
+Plug-in trigger: systemctl --user status $APP_NAME-plug.path
 Edit settings: $INSTALL_ROOT/config.env
 EOF

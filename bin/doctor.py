@@ -195,16 +195,18 @@ def main(argv=None):
         if shutil.which("systemctl") is None:
             failures.append("command: systemctl not found")
         else:
-            for operation in ("is-enabled", "is-active"):
-                ok, detail = systemd_state(
-                    "usb-audio-transcriber.timer", operation
-                )
-                if ok:
-                    print(f"OK  timer {operation}: {detail or 'yes'}")
-                else:
-                    warnings.append(
-                        f"timer {operation}: {detail or 'not available'}"
-                    )
+            for kind, unit in (
+                ("timer", "usb-audio-transcriber.timer"),
+                ("plug-in trigger", "usb-audio-transcriber-plug.path"),
+            ):
+                for operation in ("is-enabled", "is-active"):
+                    ok, detail = systemd_state(unit, operation)
+                    if ok:
+                        print(f"OK  {kind} {operation}: {detail or 'yes'}")
+                    else:
+                        warnings.append(
+                            f"{kind} {operation}: {detail or 'not available'}"
+                        )
             linger = linger_warning()
             if linger:
                 warnings.append(linger)

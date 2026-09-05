@@ -22,7 +22,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
                          +--> optional OpenRouter summary
 ```
 
-`bin/run-cycle.sh` serializes each cycle with `flock`, runs ingestion, starts the Zenity progress reader, and then runs transcription. The user-level systemd timer starts that script approximately once per minute.
+`bin/run-cycle.sh` serializes each cycle with `flock`, runs ingestion, starts the Zenity progress reader, and then runs transcription. Two user-level systemd units start it: `usb-audio-transcriber.timer` about once per minute, and `usb-audio-transcriber-plug.path`, which fires `usb-audio-transcriber-plug.service` when a mount point appears under `/media/$USER`, `/run/media/$USER`, or `/mnt`. The plug-in service sleeps briefly so the mount can settle, then runs `run-cycle.sh --wait`, which waits for a timer-started cycle to finish instead of skipping, so freshly mounted recordings are handled immediately.
 
 ## Components
 
@@ -36,6 +36,7 @@ bin/ingest.py -- SHA-256 deduplication and verified copy
 | `bin/model_profiles.py` | Define supported model profiles, artifact naming, and Hugging Face cache paths |
 | `bin/model-cache.py` | Inspect, download, or remove supported model disk caches |
 | `bin/benchmark-models.py` | Compare models without touching the queue, database, archive, or transcript vault |
+| `systemd/*.timer`, `systemd/*-plug.path` | Start cycles on a schedule and when removable media is mounted |
 | `var/state/seen.sqlite` | Track imported recordings by SHA-256 and prevent duplicate imports |
 | `var/state/progress.json` | Publish current progress to the desktop process |
 

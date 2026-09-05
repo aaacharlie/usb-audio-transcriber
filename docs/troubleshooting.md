@@ -6,8 +6,10 @@
 ~/.local/share/usb-audio-transcriber/venv/bin/python \
   ~/.local/share/usb-audio-transcriber/bin/doctor.py
 systemctl --user status usb-audio-transcriber.timer
+systemctl --user status usb-audio-transcriber-plug.path
 systemctl --user status usb-audio-transcriber.service
 journalctl --user-unit=usb-audio-transcriber.service -n 100 --no-pager
+journalctl --user-unit=usb-audio-transcriber-plug.service -n 100 --no-pager
 ```
 
 The doctor exits nonzero for blocking configuration, dependency, or path
@@ -49,7 +51,12 @@ systemctl --user start usb-audio-transcriber.service
 journalctl --user-unit=usb-audio-transcriber.service -f
 ```
 
-A log message saying `cycle already running, skipping` means another cycle holds the lock. Check the service before killing anything.
+A log message saying `cycle already running, skipping` means another cycle holds the lock. Check the service before killing anything. A plug-in triggered cycle (`usb-audio-transcriber-plug.service`) waits up to five minutes for the lock instead of skipping and logs `cycle still running after 300s, skipping` if it gives up.
+
+## Plugging in the recorder does not start a cycle immediately
+
+- Check `systemctl --user status usb-audio-transcriber-plug.path`. It watches `/media/$USER`, `/run/media/$USER`, and `/mnt`; a drive mounted elsewhere is only seen by the timer.
+- The trigger starts about five seconds after the mount point appears. The one-minute timer still runs as a fallback, so recordings are never missed, only delayed.
 
 ## No progress window appears
 
