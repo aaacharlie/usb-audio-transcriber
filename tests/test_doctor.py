@@ -129,6 +129,68 @@ class DoctorWatchDirTests(unittest.TestCase):
             )
 
 
+class DoctorHeadlessTests(unittest.TestCase):
+    def test_check_config_rejects_unknown_headless_values(self):
+        failures = doctor.check_config({
+            "ARCHIVE_DIR": "/archive",
+            "QUEUE_DIR": "/queue",
+            "STATE_DB": "/state/seen.sqlite",
+            "VAULT_DIR": "/transcripts",
+            "AUDIO_EXTS": "wav",
+            "HEADLESS": "sometimes",
+        })
+
+        self.assertIn("HEADLESS must be auto, 0, or 1", failures)
+
+    def test_missing_zenity_is_a_warning_not_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "config.env"
+            config_path.write_text(
+                f'ARCHIVE_DIR="{directory}/archive"\n'
+                f'QUEUE_DIR="{directory}/queue"\n'
+                f'STATE_DB="{directory}/state/seen.sqlite"\n'
+                f'VAULT_DIR="{directory}/transcripts"\n'
+                'AUDIO_EXTS="wav"\n',
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with mock.patch(
+                        "shutil.which",
+                        side_effect=lambda command:
+                        None if command in {"zenity", "notify-send"} else "/usr/bin/tool",
+                    ), \
+                    mock.patch("importlib.util.find_spec", return_value=object()), \
+                    mock.patch("sys.stdout", output):
+                result = doctor.main([
+                    "--config", str(config_path), "--skip-systemd"
+                ])
+
+            self.assertEqual(result, 0)
+            self.assertIn("WARN command: zenity not found", output.getvalue())
+            self.assertIn("WARN command: notify-send not found", output.getvalue())
+
+    def test_linger_warning_explains_headless_timers(self):
+        completed = mock.Mock(returncode=0, stdout="no\n")
+        with mock.patch.object(doctor.shutil, "which", return_value="/usr/bin/loginctl"), \
+                mock.patch.object(doctor.subprocess, "run", return_value=completed):
+            warning = doctor.linger_warning("pi")
+
+        self.assertIn("loginctl enable-linger pi", warning)
+
+    def test_linger_warning_is_silent_when_lingering_is_on_or_unknown(self):
+        with mock.patch.object(doctor.shutil, "which", return_value="/usr/bin/loginctl"):
+            with mock.patch.object(
+                doctor.subprocess, "run", return_value=mock.Mock(returncode=0, stdout="yes\n")
+            ):
+                self.assertIsNone(doctor.linger_warning("pi"))
+            with mock.patch.object(
+                doctor.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="")
+            ):
+                self.assertIsNone(doctor.linger_warning("pi"))
+        with mock.patch.object(doctor.shutil, "which", return_value=None):
+            self.assertIsNone(doctor.linger_warning("pi"))
+
+
 class DoctorPathTests(unittest.TestCase):
     def test_writable_parent_checks_dotted_directories_themselves(self):
         with tempfile.TemporaryDirectory() as directory:

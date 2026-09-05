@@ -47,6 +47,9 @@ def check_config(config):
     for name in ("PURGE_DEVICE", "VAD_ENABLED"):
         if config.get(name, "0").strip() not in {"0", "1"}:
             failures.append(f"{name} must be 0 or 1")
+    for name in ("HEADLESS",):
+        if config.get(name, "auto").strip().lower() not in {"auto", "0", "1"}:
+            failures.append(f"{name} must be auto, 0, or 1")
     for name, default in (
         ("VAD_MIN_SILENCE_MS", "1200"),
         ("MAP_WINDOW_CHARS", "80000"),
@@ -98,6 +101,27 @@ def writable_parent(path, is_file=False):
     return candidate if candidate.exists() else None
 
 
+def linger_warning(user=None):
+    """Explain that user timers stop at logout, which matters on headless machines."""
+    if shutil.which("loginctl") is None:
+        return None
+    user = user or os.environ.get("USER") or ""
+    if not user:
+        return None
+    result = subprocess.run(
+        ["loginctl", "show-user", user, "--property=Linger", "--value"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or result.stdout.strip() != "no":
+        return None
+    return (
+        f"lingering is off for {user}: the timer only runs while you are logged in. "
+        f"For a headless machine or Raspberry Pi run: loginctl enable-linger {user}"
+    )
+
+
 def systemd_state(unit, operation):
     result = subprocess.run(
         ["systemctl", "--user", operation, unit],
@@ -131,12 +155,23 @@ def main(argv=None):
         else:
             print(f"OK  configuration: {args.config}")
 
-    for command in ("ffmpeg", "zenity", "flock", "tee"):
+    for command in ("ffmpeg", "flock", "tee"):
         location = shutil.which(command)
         if location:
             print(f"OK  command: {command} ({location})")
         else:
             failures.append(f"command: {command} not found")
+    for command, purpose in (
+        ("zenity", "desktop progress window"),
+        ("notify-send", "desktop notifications"),
+    ):
+        location = shutil.which(command)
+        if location:
+            print(f"OK  command: {command} ({location})")
+        else:
+            warnings.append(
+                f"command: {command} not found; the {purpose} will be skipped"
+            )
 
     for package in ("faster_whisper", "requests"):
         if importlib.util.find_spec(package) is not None:
@@ -170,6 +205,9 @@ def main(argv=None):
                     warnings.append(
                         f"timer {operation}: {detail or 'not available'}"
                     )
+            linger = linger_warning()
+            if linger:
+                warnings.append(linger)
 
     for warning in warnings:
         print(f"WARN {warning}")

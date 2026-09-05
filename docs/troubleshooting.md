@@ -53,7 +53,8 @@ A log message saying `cycle already running, skipping` means another cycle holds
 
 ## No progress window appears
 
-- Confirm a graphical user session and `zenity` are available.
+- Confirm a graphical user session and `zenity` are available. With `HEADLESS="auto"` the window is skipped when neither `DISPLAY` nor `WAYLAND_DISPLAY` reaches the service; `HEADLESS="1"` skips it always.
+- On a machine without a desktop this is expected. See "Run on a headless machine" in the usage guide, and run `loginctl enable-linger "$USER"` so the timer survives logout.
 - The window exits quietly when no work becomes active during its startup timeout.
 - Inspect `~/.local/share/usb-audio-transcriber/var/state/progress.json` for the most recent phase.
 - The service can continue successfully even if the desktop window cannot be shown.

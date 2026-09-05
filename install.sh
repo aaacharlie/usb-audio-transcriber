@@ -12,7 +12,7 @@ python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' || {
   exit 1
 }
 command -v ffmpeg >/dev/null || { echo "ffmpeg is required; install it with: sudo apt install ffmpeg" >&2; exit 1; }
-command -v zenity >/dev/null || { echo "zenity is required; install it with: sudo apt install zenity" >&2; exit 1; }
+command -v zenity >/dev/null || echo "zenity not found: the desktop progress window will be skipped (headless mode). Install it with: sudo apt install zenity" >&2
 command -v flock >/dev/null || { echo "flock is required (usually provided by util-linux)" >&2; exit 1; }
 command -v tee >/dev/null || { echo "tee is required (usually provided by coreutils)" >&2; exit 1; }
 command -v systemctl >/dev/null || { echo "systemctl is required" >&2; exit 1; }

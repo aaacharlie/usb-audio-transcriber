@@ -95,6 +95,21 @@ $PYTHON $APP/bin/benchmark-models.py /path/to/recording.wav --profile both
 
 By default, results go to `<recording-file-name>-whisper-ab/` beside the source — for example `meeting.wav-whisper-ab/` — keeping the extension so benchmarks of `meeting.wav` and `meeting.mp3` never overwrite each other. Use `--output-dir` to select another location. The benchmark does not modify the source, archive, queue, SQLite state, or transcript vault.
 
+## Run on a headless machine or Raspberry Pi
+
+The pipeline does not need a desktop. On a server, a NAS, or a Raspberry Pi with a USB port:
+
+1. Install as usual. `zenity` is optional; without it the progress window is simply skipped.
+2. Allow your user's timers to run without a login session:
+
+   ```bash
+   loginctl enable-linger "$USER"
+   ```
+
+   The doctor warns when this is off.
+3. Optionally set `HEADLESS="1"` in `config.env` to skip the desktop window and notifications explicitly. The default `auto` already skips them when no graphical session is detected.
+4. Point `VAULT_DIR` at a folder that syncs to your laptop or phone, or read the notes over the network. Progress is logged to `var/logs/pipeline.log`.
+
 ## Pause and resume scanning
 
 ```bash

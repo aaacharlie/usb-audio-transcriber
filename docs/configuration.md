@@ -56,6 +56,14 @@ Keep `PURGE_DEVICE=0` unless device cleanup is intentional. A matching file is s
 
 The stock CPU configuration is deliberately conservative. GPU users must select a compatible device and compute type for their local CTranslate2 installation.
 
+## Desktop integration
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `HEADLESS` | `auto` | `auto` shows the progress window only when a graphical session and `zenity` exist; `1` never shows it; `0` always tries |
+
+Headless machines also need `loginctl enable-linger "$USER"` so the user timer keeps running without a login session; the doctor warns when lingering is off.
+
 ## Optional summarization
 
 | Setting | Default | Meaning |
