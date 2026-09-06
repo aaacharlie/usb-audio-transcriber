@@ -28,6 +28,7 @@ from pathlib import Path
 
 APP_ID = "io.github.aaacharlie.UsbAudioTranscriber"
 TITLE = "USB Audio Transcriber"
+APP_ICON_FILE = Path(__file__).resolve().parent.parent / "share" / f"{APP_ID}.svg"
 BACKENDS = [("", "Configured backend"), ("command", "Command-line tool (Codex, Claude Code, ...)"),
             ("openai", "Local model (Ollama)"), ("openrouter", "OpenRouter")]
 PROFILES = ["fast", "accurate", "both"]
@@ -46,6 +47,14 @@ CSS = """
 .big { font-size: 1.9em; font-weight: 700; }
 .hint { font-size: 0.9em; opacity: 0.75; }
 .failure { color: @error_color; }
+.page-title { font-size: 1.45em; font-weight: 800; color: @accent_color; }
+.hero { padding: 18px 22px; border-radius: 16px; background: alpha(@accent_bg_color, 0.12); }
+.hero-title { font-size: 1.55em; font-weight: 700; }
+.dot { border-radius: 999px; min-width: 10px; min-height: 10px; background: alpha(currentColor, 0.35); }
+.dot.ok { background: @success_color; }
+.dot.busy { background: @accent_bg_color; }
+.dot.warn { background: @warning_color; }
+.dot.bad { background: @error_color; }
 """
 
 
@@ -112,6 +121,25 @@ def unit_pill(unit):
         return "no systemd", ""
     active = unit.get("active", "unknown")
     return active, "ok" if active in ("active", "activating") else "warn"
+
+
+def headline(status, running_label=None, unreachable=False):
+    """(text, kind) for the big line on Home and the status bar; kind is ok, busy, warn, bad, or ""."""
+    if unreachable:
+        return "The panel is not answering", "bad"
+    if not status:
+        return "Connecting", ""
+    progress = status.get("progress") or {}
+    if progress.get("active"):
+        percent = progress.get("current_percent")
+        text = progress.get("phase") or "Working"
+        return (text + (f" {percent}%" if percent is not None else "")), "busy"
+    if running_label:
+        return running_label, "busy"
+    timer = (status.get("units") or {}).get("timer")
+    if status.get("systemd") and timer and timer.get("active") != "active":
+        return "Automatic runs paused", "warn"
+    return "Idle, watching for the recorder", "ok"
 
 
 def note_label(hit):
@@ -207,10 +235,22 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             label.add_css_class(kind)
         return label
 
-    def value_row(title, subtitle=None):
+    def icon_image(name):
+        """A symbolic icon, or None when the theme lacks it (then the row has no picture)."""
+        display = Gdk.Display.get_default()
+        if not name or display is None or not Gtk.IconTheme.get_for_display(display).has_icon(name):
+            return None
+        image = Gtk.Image.new_from_icon_name(name)
+        image.add_css_class("dim-label")
+        return image
+
+    def value_row(title, subtitle=None, icon=None):
         row = Adw.ActionRow(title=title)
         if subtitle:
             row.set_subtitle(subtitle)
+        picture = icon_image(icon)
+        if picture is not None:
+            row.add_prefix(picture)
         value = Gtk.Label(valign=Gtk.Align.CENTER, xalign=1, ellipsize=Pango.EllipsizeMode.MIDDLE,
                           max_width_chars=60)
         value.add_css_class("dim-label")
@@ -431,6 +471,8 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             self.entries = {}
             self.note_window = None
             self.pages = {}
+            self.failures = 0
+            self.status_pending = False
             self.build()
             if page:
                 self.show_page(page)
@@ -455,10 +497,13 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             root.append(bar)
             status_box = Gtk.Box(spacing=8)
             status_box.add_css_class("statusbar")
+            self.dot = Gtk.Box(valign=Gtk.Align.CENTER)
+            self.dot.add_css_class("dot")
             self.spinner = Gtk.Spinner()
             self.status_label = Gtk.Label(label="Connecting", xalign=0, hexpand=True)
             self.version_label = Gtk.Label(label="", xalign=1)
             self.version_label.add_css_class("dim-label")
+            status_box.append(self.dot)
             status_box.append(self.spinner)
             status_box.append(self.status_label)
             status_box.append(self.version_label)
@@ -491,10 +536,16 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
         def toast(self, text):
             self.toasts.add_toast(Adw.Toast.new(text))
 
-        def set_status(self, text, busy=False):
+        def set_state(self, text, kind):
+            """The status bar and the Home headline say the same thing."""
             self.status_label.set_text(text)
-            self.spinner.set_visible(busy)
-            if busy:
+            self.hero_title.set_text(text)
+            for css in ("ok", "busy", "warn", "bad"):
+                self.dot.remove_css_class(css)
+            if kind:
+                self.dot.add_css_class(kind)
+            self.spinner.set_visible(kind == "busy")
+            if kind == "busy":
                 self.spinner.start()
             else:
                 self.spinner.stop()
@@ -502,28 +553,51 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
         # ------------------------------------------------------------ home
         def build_home(self):
             scrolled, box = page_box()
-            toolbar = Gtk.Box(spacing=8)
-            heading = Gtk.Label(label="Home", xalign=0, hexpand=True)
-            heading.add_css_class("title-2")
-            toolbar.append(heading)
+            hero = Gtk.Box(spacing=20)
+            hero.add_css_class("hero")
+            if APP_ICON_FILE.is_file():
+                logo = Gtk.Image.new_from_file(str(APP_ICON_FILE))
+            else:
+                logo = Gtk.Image.new_from_icon_name(APP_ID)
+            logo.set_pixel_size(88)
+            logo.set_valign(Gtk.Align.CENTER)
+            hero.append(logo)
+            words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.CENTER,
+                            hexpand=True)
+            self.hero_title = Gtk.Label(label="Connecting", xalign=0, wrap=True)
+            self.hero_title.add_css_class("hero-title")
+            self.hero_detail = Gtk.Label(label=TITLE, xalign=0, wrap=True)
+            self.hero_detail.add_css_class("dim-label")
+            self.hero_progress = Gtk.ProgressBar(visible=False, margin_top=6)
+            words.append(self.hero_title)
+            words.append(self.hero_detail)
+            words.append(self.hero_progress)
+            hero.append(words)
+            actions = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, valign=Gtk.Align.CENTER)
+            actions.append(button("Run a cycle now", lambda: self.start_job("cycle", {}), "suggested-action"))
             self.pause_button = button("Pause automatic runs", self.toggle_timer)
-            toolbar.append(self.pause_button)
-            toolbar.append(button("Run a cycle now", lambda: self.start_job("cycle", {}), "suggested-action"))
-            box.append(toolbar)
+            actions.append(self.pause_button)
+            hero.append(actions)
+            box.append(hero)
+
             pipeline = group("Pipeline")
             self.home = {}
-            for key, title in (("timer", "Timer"), ("plug", "Plug-in trigger"),
-                               ("activity", "Last activity"), ("phase", "Phase"),
-                               ("queued", "Queued"), ("detected", "On the recorder")):
-                row, value = value_row(title)
+            for key, title, icon in (("timer", "Timer", "alarm-symbolic"),
+                                     ("plug", "Plug-in trigger", "drive-removable-media-symbolic"),
+                                     ("activity", "Last activity", "document-open-recent-symbolic"),
+                                     ("phase", "Phase", "system-run-symbolic"),
+                                     ("queued", "Queued", "view-list-symbolic"),
+                                     ("detected", "On the recorder", "audio-input-microphone-symbolic")):
+                row, value = value_row(title, icon=icon)
                 self.home[key] = value
                 pipeline.add(row)
             box.append(pipeline)
 
             library = group("Library")
-            for key, title in (("recordings", "Recordings"), ("sessions", "Sessions"),
-                               ("summarized", "Sessions with a summary")):
-                row, value = value_row(title)
+            for key, title, icon in (("recordings", "Recordings", "folder-music-symbolic"),
+                                     ("sessions", "Sessions", "emblem-documents-symbolic"),
+                                     ("summarized", "Sessions with a summary", "starred-symbolic")):
+                row, value = value_row(title, icon=icon)
                 self.home[key] = value
                 library.add(row)
             box.append(library)
@@ -533,22 +607,28 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             suffix.append(button("Test", lambda: self.start_job("test-backend", {})))
             suffix.append(button("Change", lambda: self.show_page("settings")))
             summaries.set_header_suffix(suffix)
-            for key, title in (("backend", "Backend"), ("subject", "Subject")):
-                row, value = value_row(title)
+            for key, title, icon in (("backend", "Backend", "document-edit-symbolic"),
+                                     ("subject", "Subject", "dialog-information-symbolic")):
+                row, value = value_row(title, icon=icon)
                 self.home[key] = value
                 summaries.add(row)
             box.append(summaries)
 
             whisper = group("Whisper")
-            for key, title in (("profile", "Profile"), ("fast", "fast (distil-large-v3)"),
-                               ("accurate", "accurate (large-v3)"), ("disk", "Disk free")):
-                row, value = value_row(title)
+            for key, title, icon in (("profile", "Profile", "preferences-system-symbolic"),
+                                     ("fast", "fast (distil-large-v3)", "folder-download-symbolic"),
+                                     ("accurate", "accurate (large-v3)", "folder-download-symbolic"),
+                                     ("disk", "Disk free", "drive-harddisk-symbolic")):
+                row, value = value_row(title, icon=icon)
                 self.home[key] = value
                 whisper.add(row)
             box.append(whisper)
 
             notes = group("Notes")
             self.vault_row = Adw.ActionRow(title="Folder", subtitle="")
+            folder_icon = icon_image("folder-symbolic")
+            if folder_icon is not None:
+                self.vault_row.add_prefix(folder_icon)
             self.vault_row.add_suffix(button("Open folder", lambda: self.open_path(self.vault_path(""))))
             notes.add(self.vault_row)
             box.append(notes)
@@ -576,8 +656,16 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             self.home["phase"].set_text(p.get("phase") or "idle")
             self.home["queued"].set_text(str(s.get("queued", 0)))
             detected = s.get("detected")
-            self.home["detected"].set_text("?" if detected is None else f"{detected} file(s)")
+            self.home["detected"].set_text("checking" if detected is None else f"{detected} file(s)")
             counts = s.get("counts") or {}
+            self.hero_detail.set_text(
+                f"Last activity {when(p.get('updated_at')) or 'never'}  ·  "
+                f"{counts.get('recordings', 0)} recordings  ·  {counts.get('sessions', 0)} sessions  ·  "
+                f"{s.get('queued', 0)} queued")
+            percent = p.get("current_percent") if p.get("active") else None
+            self.hero_progress.set_visible(percent is not None)
+            if percent is not None:
+                self.hero_progress.set_fraction(max(0.0, min(1.0, float(percent) / 100.0)))
             for key in ("recordings", "sessions", "summarized"):
                 self.home[key].set_text(str(counts.get(key, 0)))
             summaries = s.get("summaries") or {}
@@ -614,26 +702,23 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             return True
 
         def refresh_status(self):
+            if self.status_pending:
+                return  # the last request is still out; never pile up
+            self.status_pending = True
             call(lambda: api.request("/api/status"), self.on_status)
 
         def on_status(self, status, error):
+            self.status_pending = False
             if error:
-                self.set_status(f"Panel unreachable: {error}")
+                self.failures += 1
+                if self.failures >= 2:  # one slow answer is not an outage
+                    self.set_state(*headline(self.status, unreachable=True))
+                    self.hero_detail.set_text(str(error))
                 return
+            self.failures = 0
             self.status = status
-            p = status.get("progress") or {}
             running = next((j for j in self.jobs if j["status"] == "running"), None)
-            timer = (status.get("units") or {}).get("timer")
-            paused = bool(timer) and timer.get("active") != "active"
-            if p.get("active"):
-                percent = p.get("current_percent")
-                self.set_status((p.get("phase") or "Working") + (f" {percent}%" if percent is not None else ""), True)
-            elif running:
-                self.set_status(running["label"], True)
-            elif status.get("systemd") and paused:
-                self.set_status("Automatic runs paused")
-            else:
-                self.set_status("Idle, watching for the recorder")
+            self.set_state(*headline(status, running["label"] if running else None))
             self.render_home()
             self.fill_backend_picker()
 
@@ -670,8 +755,8 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
                     self.toast(job["label"] + (": done" if job["status"] == "done" else ": failed, see the output below"))
             running = next((j for j in self.jobs if j["status"] == "running"), None)
             if running:
-                if not (self.status and (self.status.get("progress") or {}).get("active")):
-                    self.set_status(running["label"], True)
+                if self.status and not (self.status.get("progress") or {}).get("active"):
+                    self.set_state(*headline(self.status, running["label"]))
                 GLib.timeout_add(2000, lambda: (self.poll_jobs(), False)[1])
             else:
                 if self.stack.get_visible_child_name() == "sessions":
@@ -688,7 +773,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             scrolled, box = page_box()
             toolbar = Gtk.Box(spacing=8)
             heading = Gtk.Label(label="Sessions", xalign=0, hexpand=True)
-            heading.add_css_class("title-2")
+            heading.add_css_class("page-title")
             toolbar.append(heading)
             self.backend_picker = Gtk.DropDown.new_from_strings([label for _, label in BACKENDS])
             self.backend_picker.set_valign(Gtk.Align.CENTER)
@@ -774,7 +859,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             scrolled, box = page_box()
             toolbar = Gtk.Box(spacing=8)
             heading = Gtk.Label(label="Recordings", xalign=0, hexpand=True)
-            heading.add_css_class("title-2")
+            heading.add_css_class("page-title")
             toolbar.append(heading)
             toolbar.append(button("Refresh", self.load_recordings))
             box.append(toolbar)
@@ -878,7 +963,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             self.settings_box = box
             toolbar = Gtk.Box(spacing=8)
             heading = Gtk.Label(label="Settings", xalign=0, hexpand=True)
-            heading.add_css_class("title-2")
+            heading.add_css_class("page-title")
             toolbar.append(heading)
             toolbar.append(button("Find my Obsidian vault", self.find_vault))
             toolbar.append(button("Test summary backend", lambda: self.start_job("test-backend", {})))
@@ -1147,23 +1232,46 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             call(lambda: api.request("/api/open", body={"path": path}), done)
 
     class App(Adw.Application):
+        """One instance per session: launching again raises the existing window."""
+
         def __init__(self):
-            super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE)
+            super().__init__(application_id=APP_ID)
+            self.window = None
+            action = Gio.SimpleAction.new("show-page", GLib.VariantType.new("s"))
+            action.connect("activate", lambda _action, name: self.show_page(name.get_string()))
+            self.add_action(action)
+
+        def show_page(self, name):
+            if self.window is not None:
+                self.window.show_page(name)
+                self.window.present()
 
         def do_activate(self):
-            provider = Gtk.CssProvider()
-            if hasattr(provider, "load_from_string"):
-                provider.load_from_string(CSS)
-            else:
-                provider.load_from_data(CSS.encode("utf-8"))
-            Gtk.StyleContext.add_provider_for_display(
-                Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            window = Window(self)
-            window.present()
-            if on_ready is not None:
-                GLib.timeout_add(600, lambda: (on_ready(window), False)[1])
+            if self.window is None:
+                provider = Gtk.CssProvider()
+                if hasattr(provider, "load_from_string"):
+                    provider.load_from_string(CSS)
+                else:
+                    provider.load_from_data(CSS.encode("utf-8"))
+                Gtk.StyleContext.add_provider_for_display(
+                    Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+                Gtk.Window.set_default_icon_name(APP_ID)
+                self.window = Window(self)
+                if on_ready is not None:
+                    GLib.timeout_add(600, lambda: (on_ready(self.window), False)[1])
+            self.window.present()
 
-    return App().run([])
+    application = App()
+    try:
+        application.register(None)
+    except GLib.Error:
+        pass  # no session bus: run on our own
+    if application.get_is_remote():
+        application.activate()
+        if page:
+            application.activate_action("show-page", GLib.Variant("s", page))
+        return 0
+    return application.run([])
 
 
 # --------------------------------------------------------------------------- launching

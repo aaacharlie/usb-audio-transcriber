@@ -2,6 +2,9 @@
 set -euo pipefail
 
 APP_NAME=usb-audio-transcriber
+# The window's application id: the app-menu entry and icon carry this name so
+# the desktop can match the running window to them.
+APP_ID=io.github.aaacharlie.UsbAudioTranscriber
 SOURCE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/$APP_NAME"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
@@ -99,13 +102,18 @@ systemctl --user daemon-reload
 systemctl --user enable --now "$APP_NAME.timer"
 systemctl --user enable --now "$APP_NAME-plug.path"
 systemctl --user enable --now "$APP_NAME-panel.service"
+# A panel server that was already running is still the old code.
+systemctl --user try-restart "$APP_NAME-panel.service"
 
 # App menu entry and icon for the control panel.
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 mkdir -p "$DATA_HOME/applications" "$DATA_HOME/icons/hicolor/scalable/apps"
-render "$(<"$SOURCE_ROOT/share/$APP_NAME.desktop")" \
-  > "$DATA_HOME/applications/$APP_NAME.desktop"
-cp "$SOURCE_ROOT/share/$APP_NAME.svg" "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg"
+render "$(<"$SOURCE_ROOT/share/$APP_ID.desktop")" \
+  > "$DATA_HOME/applications/$APP_ID.desktop"
+cp "$SOURCE_ROOT/share/$APP_ID.svg" "$DATA_HOME/icons/hicolor/scalable/apps/$APP_ID.svg"
+# Earlier versions installed the entry under the plain name.
+rm -f "$DATA_HOME/applications/$APP_NAME.desktop" \
+  "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg"
 command -v update-desktop-database >/dev/null && \
   update-desktop-database "$DATA_HOME/applications" 2>/dev/null || true
 

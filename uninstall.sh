@@ -13,7 +13,9 @@ rm -f "$UNIT_DIR/$APP_NAME.service" "$UNIT_DIR/$APP_NAME.timer" \
   "$UNIT_DIR/$APP_NAME-panel.service"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 rm -f "$DATA_HOME/applications/$APP_NAME.desktop" \
-  "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg"
+  "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg" \
+  "$DATA_HOME/applications/io.github.aaacharlie.UsbAudioTranscriber.desktop" \
+  "$DATA_HOME/icons/hicolor/scalable/apps/io.github.aaacharlie.UsbAudioTranscriber.svg"
 systemctl --user daemon-reload
 rm -rf "$INSTALL_ROOT/bin" "$INSTALL_ROOT/systemd" "$INSTALL_ROOT/prompts" \
   "$INSTALL_ROOT/panel" "$INSTALL_ROOT/share" "$INSTALL_ROOT/venv"

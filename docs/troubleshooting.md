@@ -89,6 +89,10 @@ Check free disk space and network access. For GPU configurations, verify that th
 
 The window needs the GTK bindings for the system's `python3`: on Debian and Ubuntu `sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`, then open it again. `bin/panel.py open` prints a one-line reason on the terminal when it falls back to the browser, and `bin/app.py --connect URL --token-file PATH` (the command it runs) shows any GTK error directly; add `--verbose` to see every request the window makes.
 
+## The dock shows a gear instead of the microphone icon while the window is open
+
+The desktop matches a running window to its menu entry by name, and versions before 1.1.0 installed the entry under a different name than the window's id. Update (the installer replaces the entry with `io.github.aaacharlie.UsbAudioTranscriber.desktop`), close the window, and open it again from the menu. If the old entry lingers in the menu, `~/.local/share/applications/usb-audio-transcriber.desktop` can be deleted by hand.
+
 ## The control panel does not open
 
 - `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` (`usb-audio-transcriber panel open` with pipx) starts one itself and prints the link.
