@@ -74,15 +74,16 @@ class InstallTests(unittest.TestCase):
             self.assertIn(
                 f'"{escaped_root}/usb-audio-transcriber/bin/panel.py" serve', panel_service
             )
-            desktop = (data_home / "applications" / "usb-audio-transcriber.desktop").read_text(
-                encoding="utf-8"
-            )
+            app_id = "io.github.aaacharlie.UsbAudioTranscriber"
+            desktop = (data_home / "applications" / f"{app_id}.desktop").read_text(encoding="utf-8")
             self.assertIn(f'"{escaped_root}/usb-audio-transcriber/bin/panel.py" open', desktop)
-            self.assertIn("Icon=usb-audio-transcriber", desktop)
+            self.assertIn(f"Icon={app_id}", desktop)
+            self.assertIn(f"StartupWMClass={app_id}", desktop)
             self.assertTrue(
-                (data_home / "icons" / "hicolor" / "scalable" / "apps" /
-                 "usb-audio-transcriber.svg").is_file()
+                (data_home / "icons" / "hicolor" / "scalable" / "apps" / f"{app_id}.svg").is_file()
             )
+            self.assertFalse((data_home / "applications" / "usb-audio-transcriber.desktop").exists(),
+                             "the entry from earlier versions is removed")
             self.assertTrue((data_home / "usb-audio-transcriber" / "panel" / "index.html").is_file())
             self.assertTrue((data_home / "usb-audio-transcriber" / "VERSION").is_file())
             config = data_home / "usb-audio-transcriber" / "config.env"
@@ -132,6 +133,8 @@ class InstallTests(unittest.TestCase):
             self.assertIn("--user enable --now usb-audio-transcriber.timer", recorded)
             self.assertIn("--user enable --now usb-audio-transcriber-plug.path", recorded)
             self.assertIn("--user enable --now usb-audio-transcriber-panel.service", recorded)
+            self.assertIn("--user try-restart usb-audio-transcriber-panel.service", recorded,
+                          "an update must replace the running panel server")
             self.assertLess(
                 recorded.index("--user daemon-reload"),
                 recorded.index("--user enable --now usb-audio-transcriber-plug.path"),
@@ -275,7 +278,7 @@ class UninstallTests(unittest.TestCase):
                          "usb-audio-transcriber-plug.path",
                          "usb-audio-transcriber-panel.service"):
                 (unit_dir / name).write_text("[Unit]\n", encoding="utf-8")
-            desktop = root / "data" / "applications" / "usb-audio-transcriber.desktop"
+            desktop = root / "data" / "applications" / "io.github.aaacharlie.UsbAudioTranscriber.desktop"
             desktop.parent.mkdir(parents=True)
             desktop.write_text("[Desktop Entry]\n", encoding="utf-8")
             env = os.environ | {

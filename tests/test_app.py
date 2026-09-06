@@ -20,6 +20,14 @@ class NoteParsingTests(unittest.TestCase):
     def setUp(self):
         self.app = load("app")
 
+    def test_the_menu_entry_and_icon_carry_the_window_id(self):
+        share = ROOT / "share"
+        desktop = (share / f"{self.app.APP_ID}.desktop").read_text(encoding="utf-8")
+        self.assertIn(f"Icon={self.app.APP_ID}\n", desktop)
+        self.assertIn(f"StartupWMClass={self.app.APP_ID}\n", desktop)
+        self.assertTrue((share / f"{self.app.APP_ID}.svg").is_file())
+        self.assertEqual(self.app.APP_ICON_FILE, share / f"{self.app.APP_ID}.svg")
+
     def test_the_module_imports_without_gtk(self):
         self.assertNotIn("gi", sys.modules.keys() & {"gi"}, "GTK is imported only when the window runs")
 
@@ -37,6 +45,17 @@ class NoteParsingTests(unittest.TestCase):
         self.assertEqual(blocks[5], ("quote", [("text", "a hint")]))
         self.assertEqual(blocks[6], ("rule",))
         self.assertEqual(blocks[7], ("paragraph", [("text", "plain")]))
+
+    def test_headline_reflects_transcription_jobs_pause_and_outages(self):
+        idle = {"progress": {}, "units": {"timer": {"active": "active"}}, "systemd": True}
+        self.assertEqual(self.app.headline(idle), ("Idle, watching for the recorder", "ok"))
+        paused = {"progress": {}, "units": {"timer": {"active": "inactive"}}, "systemd": True}
+        self.assertEqual(self.app.headline(paused), ("Automatic runs paused", "warn"))
+        busy = {"progress": {"active": True, "phase": "Transcribing REC003.mp3", "current_percent": 45}}
+        self.assertEqual(self.app.headline(busy), ("Transcribing REC003.mp3 45%", "busy"))
+        self.assertEqual(self.app.headline(idle, "Run the doctor"), ("Run the doctor", "busy"))
+        self.assertEqual(self.app.headline(None), ("Connecting", ""))
+        self.assertEqual(self.app.headline(idle, unreachable=True)[1], "bad")
 
     def test_helpers(self):
         self.assertEqual(self.app.when("2026-09-05T09:30:12"), "2026-09-05 09:30")

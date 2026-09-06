@@ -3,8 +3,11 @@ Type=Application
 Name=USB Audio Transcriber
 Comment=Transcripts, session summaries, search, and settings for your voice recorder pipeline
 Exec=@PANEL_COMMAND@ open
-Icon=usb-audio-transcriber
+Icon=io.github.aaacharlie.UsbAudioTranscriber
 Terminal=false
 Categories=AudioVideo;Audio;Utility;
 Keywords=transcribe;whisper;recorder;notes;obsidian;
 StartupNotify=false
+# The window's application id; lets the dock match the running window to this
+# entry (its icon) on X11 as well as Wayland.
+StartupWMClass=io.github.aaacharlie.UsbAudioTranscriber

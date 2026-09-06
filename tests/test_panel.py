@@ -207,6 +207,26 @@ class PanelServerTests(unittest.TestCase):
         self.assertTrue(data["summaries"]["ready"])
         self.assertEqual(data["vault"], str(self.fx.vault))
         self.assertEqual(len(data["models"]), 2)
+        self.assertIn("detected", data)
+
+    def test_recorder_count_is_refreshed_in_the_background(self):
+        calls = []
+
+        def slow_scan():
+            calls.append(1)
+            return ["a", "b", "c"]
+
+        watch = self.panel.RecorderWatch(ttl=60)
+        with mock.patch.dict(sys.modules, {"ingest": mock.Mock(find_candidates=slow_scan)}):
+            first = watch.peek()  # starts the walk, answers at once
+            for _ in range(100):
+                if watch.peek() == 3:
+                    break
+                time.sleep(0.02)
+            self.assertIsNone(first)
+            self.assertEqual(watch.peek(), 3)
+            self.assertEqual(watch.peek(), 3)
+        self.assertEqual(calls, [1], "one walk within the refresh interval")
 
     def test_config_form_masks_secrets_and_saves_through_the_doctor(self):
         status, body, _ = self.request("/api/config")

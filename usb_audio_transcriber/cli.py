@@ -38,6 +38,9 @@ from pathlib import Path
 
 APP_NAME = "usb-audio-transcriber"
 DIST_NAME = "usb-audio-transcriber"
+# The window's application id: the app-menu entry and icon carry this name so
+# the desktop can match the running window to them.
+APP_ID = "io.github.aaacharlie.UsbAudioTranscriber"
 PACKAGE = Path(__file__).resolve().parent
 # Installed with pipx or pip, the program files (bin/, prompts/, panel/, share/,
 # systemd/) sit inside the package; in a git checkout they sit beside it.
@@ -238,14 +241,19 @@ def install(args, root):
     systemctl("daemon-reload")
     for unit in ENABLED_UNITS:
         systemctl("enable", "--now", unit)
+    # A panel server that was already running is still the old code.
+    systemctl("try-restart", f"{APP_NAME}-panel.service", check=False)
 
     applications = data_home() / "applications"
     icons = data_home() / "icons" / "hicolor" / "scalable" / "apps"
     applications.mkdir(parents=True, exist_ok=True)
     icons.mkdir(parents=True, exist_ok=True)
-    desktop = (ASSETS / "share" / f"{APP_NAME}.desktop").read_text(encoding="utf-8")
-    (applications / f"{APP_NAME}.desktop").write_text(render(desktop, command), encoding="utf-8")
-    shutil.copy(ASSETS / "share" / f"{APP_NAME}.svg", icons / f"{APP_NAME}.svg")
+    desktop = (ASSETS / "share" / f"{APP_ID}.desktop").read_text(encoding="utf-8")
+    (applications / f"{APP_ID}.desktop").write_text(render(desktop, command), encoding="utf-8")
+    shutil.copy(ASSETS / "share" / f"{APP_ID}.svg", icons / f"{APP_ID}.svg")
+    # Earlier versions installed the entry under the plain name.
+    (applications / f"{APP_NAME}.desktop").unlink(missing_ok=True)
+    (icons / f"{APP_NAME}.svg").unlink(missing_ok=True)
     refresher = shutil.which("update-desktop-database")
     if refresher:
         subprocess.run([refresher, str(applications)], capture_output=True, check=False)
@@ -292,8 +300,9 @@ def uninstall(args, root):
     units = unit_dir()
     for unit in RENDERED_UNITS + COPIED_UNITS:
         (units / unit).unlink(missing_ok=True)
-    (data_home() / "applications" / f"{APP_NAME}.desktop").unlink(missing_ok=True)
-    (data_home() / "icons" / "hicolor" / "scalable" / "apps" / f"{APP_NAME}.svg").unlink(missing_ok=True)
+    for name in (APP_ID, APP_NAME):
+        (data_home() / "applications" / f"{name}.desktop").unlink(missing_ok=True)
+        (data_home() / "icons" / "hicolor" / "scalable" / "apps" / f"{name}.svg").unlink(missing_ok=True)
     if shutil.which("systemctl"):
         systemctl("daemon-reload", check=False)
     print(f"Removed the user units and the app-menu entry. Settings, state, and logs stay in {root}; "

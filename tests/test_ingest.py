@@ -436,6 +436,34 @@ class DiscoverySafetyTests(unittest.TestCase):
             self.assertEqual(ingest.find_candidates(), [])
 
 
+class MountScanTests(unittest.TestCase):
+    def test_scan_is_bounded_and_skips_hidden_and_system_folders(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mount_root = root / "media"
+            drive = mount_root / "RECORDER"
+            wanted = drive / "RECORD" / "REC001.wav"
+            nested = drive / "a" / "b" / "c" / "RECORD" / "REC002.wav"  # depth 4: still found
+            too_deep = drive / "a" / "b" / "c" / "d" / "RECORD" / "REC003.wav"
+            hidden = drive / ".Trash-1000" / "RECORD" / "REC004.wav"
+            system = drive / "System Volume Information" / "RECORD" / "REC005.wav"
+            wrong_folder = drive / "MUSIC" / "song.wav"
+            for path in (wanted, nested, too_deep, hidden, system, wrong_folder):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"x" * 5000)
+            (drive / "RECORD" / "tiny.wav").write_bytes(b"x")
+            ingest = load_ingest({
+                "ARCHIVE_DIR": str(root / "archive"),
+                "QUEUE_DIR": str(root / "queue"),
+                "STATE_DB": str(root / "state" / "seen.sqlite"),
+                "AUDIO_EXTS": "wav",
+                "RECORDER_DIR": "RECORD",
+            })
+            ingest.MOUNT_ROOTS = [mount_root]
+
+            self.assertEqual(ingest.find_candidates(), [wanted, nested])
+
+
 class WatchDirTests(unittest.TestCase):
     def config_for(self, root, **extra):
         return {

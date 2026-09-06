@@ -77,24 +77,54 @@ def sync_file_and_parent(path):
     sync_directory(path.parent)
 
 
+# Folders never worth descending into on a mounted drive.
+SKIP_DIRS = {"lost+found", "System Volume Information", "$RECYCLE.BIN", "node_modules", ".git"}
+# A recorder keeps its folder at the top of the drive; the cap keeps a large
+# external disk from being walked whole on every cycle and status refresh.
+MAX_DEPTH = 4
+
+
 def find_candidates():
     found = []
     for root in MOUNT_ROOTS:
         if not root.exists():
             continue
-        for mount in root.iterdir():
-            if not mount.is_dir():
-                continue
-            try:
-                for path in mount.rglob("*"):
-                    if (path.is_file() and not path.is_symlink()
-                            and path.parent.name == RECORDER_DIR
-                            and path.suffix.lstrip(".").lower() in EXTS
-                            and path.stat().st_size > 4096):
-                        found.append(path)
-            except (PermissionError, OSError):
-                continue
+        try:
+            mounts = sorted(mount for mount in root.iterdir() if mount.is_dir())
+        except OSError:
+            continue
+        for mount in mounts:
+            found.extend(scan_mount(mount))
     return found
+
+
+def scan_mount(mount, max_depth=MAX_DEPTH):
+    """Audio directly inside a RECORDER_DIR folder on one mounted drive, looking at
+    most max_depth levels down and skipping hidden and system folders."""
+    found = []
+    pending = [(Path(mount), 0)]
+    while pending:
+        directory, depth = pending.pop()
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            if (depth < max_depth and not entry.name.startswith(".")
+                                    and entry.name not in SKIP_DIRS):
+                                pending.append((Path(entry.path), depth + 1))
+                        elif (entry.is_file(follow_symlinks=False)
+                                and directory.name == RECORDER_DIR
+                                and Path(entry.name).suffix.lstrip(".").lower() in EXTS
+                                and entry.stat(follow_symlinks=False).st_size > 4096):
+                            found.append(Path(entry.path))
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return sorted(found)
 
 
 def find_watch_candidates():

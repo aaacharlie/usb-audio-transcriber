@@ -291,17 +291,52 @@ def count(con, sql):
         return 0
 
 
+class RecorderWatch:
+    """How many recordings sit on a plugged-in recorder, counted in the background.
+
+    Walking mounted drives can take seconds (an external disk full of files), and
+    status() is asked every few seconds by every open panel, so the count is
+    refreshed at most every `ttl` seconds by one thread and status() only reads
+    the last answer (None until the first walk finishes).
+    """
+
+    def __init__(self, ttl=30):
+        self.ttl = ttl
+        self.lock = threading.Lock()
+        self.value = None
+        self.updated = None
+        self.running = False
+
+    def peek(self):
+        with self.lock:
+            stale = self.updated is None or time.monotonic() - self.updated > self.ttl
+            if stale and not self.running:
+                self.running = True
+                threading.Thread(target=self._scan, daemon=True).start()
+            return self.value
+
+    def _scan(self):
+        try:
+            import ingest
+            value = len(ingest.find_candidates())
+        except Exception:  # discovery must never break the panel
+            value = None
+        with self.lock:
+            self.value = value
+            self.updated = time.monotonic()
+            self.running = False
+
+
+RECORDER = RecorderWatch()
+
+
 def status():
     config = load()
     progress = read_progress()
     queue = Path(config["QUEUE_DIR"])
     exts = {"." + e.strip().lower() for e in config.get("AUDIO_EXTS", "").split(",") if e.strip()}
     queued = sum(1 for p in queue.iterdir() if p.suffix.lower() in exts) if queue.is_dir() else 0
-    try:
-        import ingest
-        detected = len(ingest.find_candidates())
-    except Exception:  # discovery must never break the panel
-        detected = None
+    detected = RECORDER.peek()
     con = open_db()
     counts = {"recordings": 0, "sessions": 0, "summarized": 0}
     if con is not None:

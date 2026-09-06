@@ -108,15 +108,17 @@ class InstallTests(unittest.TestCase):
         self.assertTrue((machine.units / "usb-audio-transcriber.timer").is_file())
         self.assertIn("PathChanged=/media/%u",
                       (machine.units / "usb-audio-transcriber-plug.path").read_text(encoding="utf-8"))
-        desktop = (machine.data_home / "applications" / "usb-audio-transcriber.desktop")
+        desktop = (machine.data_home / "applications" / f"{cli.APP_ID}.desktop")
         self.assertIn(f"Exec={quoted} panel open\n", desktop.read_text(encoding="utf-8"))
+        self.assertIn(f"StartupWMClass={cli.APP_ID}\n", desktop.read_text(encoding="utf-8"))
         self.assertTrue((machine.data_home / "icons" / "hicolor" / "scalable" / "apps" /
-                         "usb-audio-transcriber.svg").is_file())
+                         f"{cli.APP_ID}.svg").is_file())
         recorded = machine.calls.read_text(encoding="utf-8").splitlines()
         self.assertEqual(recorded[0], "--user daemon-reload")
         for unit in ("usb-audio-transcriber.timer", "usb-audio-transcriber-plug.path",
                      "usb-audio-transcriber-panel.service"):
             self.assertIn(f"--user enable --now {unit}", recorded)
+        self.assertIn("--user try-restart usb-audio-transcriber-panel.service", recorded)
         scripts = (machine.root / "script-calls").read_text(encoding="utf-8")
         self.assertIn(f"doctor --config {config} --skip-systemd", scripts)
         self.assertNotIn("setup", scripts, "no desktop and no terminal: the wizard is skipped")
@@ -175,9 +177,9 @@ class InstallTests(unittest.TestCase):
 
         self.assertEqual(code, 0, err)
         self.assertEqual(list(machine.units.iterdir()), [])
-        self.assertFalse((machine.data_home / "applications" / "usb-audio-transcriber.desktop").exists())
+        self.assertFalse((machine.data_home / "applications" / f"{cli.APP_ID}.desktop").exists())
         self.assertFalse((machine.data_home / "icons" / "hicolor" / "scalable" / "apps" /
-                          "usb-audio-transcriber.svg").exists())
+                          f"{cli.APP_ID}.svg").exists())
         self.assertTrue(config.is_file())
         self.assertTrue(recording.is_file())
         recorded = machine.calls.read_text(encoding="utf-8").splitlines()
