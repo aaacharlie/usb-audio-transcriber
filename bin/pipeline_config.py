@@ -4,7 +4,13 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# ASSETS holds the program files that ship together: bin/ (this file),
+# prompts/, panel/, share/, systemd/. ROOT holds what belongs to the person:
+# config.env and var/ (logs, state). install.sh keeps both in the same folder;
+# a pipx install keeps the program inside the package and points ROOT at the
+# data folder through USB_AUDIO_TRANSCRIBER_ROOT.
+ASSETS = Path(__file__).resolve().parent.parent
+ROOT = Path(os.environ.get("USB_AUDIO_TRANSCRIBER_ROOT", "").strip() or ASSETS).expanduser()
 PROGRESS_PATH = ROOT / "var" / "state" / "progress.json"
 
 
@@ -19,6 +25,22 @@ def load(path=None):
         value = os.path.expandvars(val.strip().strip('"').strip("'"))
         cfg[key.strip()] = os.path.expanduser(value)
     return cfg
+
+
+def version(version_file=None):
+    """The program version: package metadata for a pipx install, else the VERSION
+    file install.sh writes, else "dev"."""
+    if (ASSETS / "__init__.py").is_file():  # running from inside the installed package
+        try:
+            from importlib.metadata import version as dist_version
+            return dist_version("usb-audio-transcriber")
+        except Exception:
+            pass
+    try:
+        text = Path(version_file or ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "dev"
+    return text or "dev"
 
 
 def sync_directory(path):

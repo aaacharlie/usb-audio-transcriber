@@ -4,6 +4,6 @@ Description=USB audio ingest and transcription cycle
 [Service]
 Type=oneshot
 UMask=0077
-ExecStart="@INSTALL_ROOT@/bin/run-cycle.sh"
+ExecStart=@CYCLE_COMMAND@
 Nice=10
 IOSchedulingClass=idle

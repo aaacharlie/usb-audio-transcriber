@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "usb-audio-transcriber"
+dynamic = ["version"]
+description = "Plug in a voice recorder, walk away, come back to timestamped, searchable notes and a session summary. Local faster-whisper pipeline for Linux."
+readme = "docs/pypi-readme.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "aaacharlie" }]
+keywords = ["whisper", "faster-whisper", "transcription", "voice-recorder", "obsidian", "speech-to-text", "usb", "systemd"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Office/Business",
+    "Topic :: Text Processing",
+]
+dependencies = [
+    "faster-whisper>=1.2.1,<2",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# Speaker labels ("Speaker 1", "Speaker 2"); installs PyTorch, which is large.
+diarization = ["pyannote.audio>=3.1,<4"]
+
+[project.urls]
+Homepage = "https://github.com/aaacharlie/usb-audio-transcriber"
+Documentation = "https://github.com/aaacharlie/usb-audio-transcriber/blob/main/docs/README.md"
+Changelog = "https://github.com/aaacharlie/usb-audio-transcriber/blob/main/CHANGELOG.md"
+Issues = "https://github.com/aaacharlie/usb-audio-transcriber/issues"
+
+[project.scripts]
+usb-audio-transcriber = "usb_audio_transcriber.cli:main"
+
+# The version comes from the git tag (v1.1.0 -> 1.1.0); a checkout between tags
+# gets a .devN version, and a tarball without git history gets 0.0.0.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.0.0"
+
+# The program files stay where they always were (bin/, prompts/, panel/,
+# share/, systemd/), so ./install.sh from a clone keeps working; the wheel
+# carries copies of them inside the package for the usb-audio-transcriber
+# command to run.
+[tool.hatch.build.targets.wheel]
+packages = ["usb_audio_transcriber"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"bin" = "usb_audio_transcriber/bin"
+"prompts" = "usb_audio_transcriber/prompts"
+"panel" = "usb_audio_transcriber/panel"
+"share" = "usb_audio_transcriber/share"
+"systemd" = "usb_audio_transcriber/systemd"
+"config.example.env" = "usb_audio_transcriber/config.example.env"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "bin", "prompts", "panel", "share", "systemd", "usb_audio_transcriber", "tests", "docs",
+    "config.example.env", "requirements.txt", "requirements-diarization.txt",
+    "install.sh", "uninstall.sh", "bootstrap.sh", "*.md", "LICENSE",
+]
+exclude = ["**/__pycache__", "docs/assets/*.png"]

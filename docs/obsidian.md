@@ -9,6 +9,7 @@ The setup wizard runs on first install and can be run again any time:
 ```bash
 ~/.local/share/usb-audio-transcriber/venv/bin/python \
   ~/.local/share/usb-audio-transcriber/bin/setup.py
+usb-audio-transcriber setup       # pipx
 ```
 
 It reads the vault list Obsidian keeps for the native, Flatpak, and Snap packages, falls back to a short search of your home folder for `.obsidian` directories, and offers to create a folder such as `Recordings` inside the vault you pick. On a desktop it shows dialogs; over SSH it asks in the terminal. Nothing in the vault is touched except that folder.

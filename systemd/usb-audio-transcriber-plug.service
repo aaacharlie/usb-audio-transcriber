@@ -7,6 +7,6 @@ UMask=0077
 # Give the mount a moment to settle, then wait for any timer-started cycle to
 # finish so the new recordings are handled by this run, not the next poll.
 ExecStartPre=/bin/sleep 5
-ExecStart="@INSTALL_ROOT@/bin/run-cycle.sh" --wait
+ExecStart=@CYCLE_COMMAND@ --wait
 Nice=10
 IOSchedulingClass=idle

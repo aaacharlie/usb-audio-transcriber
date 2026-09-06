@@ -3,10 +3,13 @@ config.env
 config.env.*
 !config.example.env
 
-# Python environments and caches
+# Python environments, caches, and package builds
 venv/
 __pycache__/
 *.py[cod]
+dist/
+build/
+*.egg-info/
 
 # Runtime data: recordings, transcripts, logs, progress, and deduplication state
 var/

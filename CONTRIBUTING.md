@@ -14,7 +14,7 @@ Contributions are welcome when they preserve the project's local-first and sourc
 ```bash
 git switch -c fix/short-description
 # make the change
-python3 -m py_compile bin/*.py
+python3 -m py_compile bin/*.py usb_audio_transcriber/*.py
 bash -n install.sh uninstall.sh bootstrap.sh bin/run-cycle.sh
 python3 -m unittest discover -s tests -v
 git diff --check

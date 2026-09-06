@@ -2,7 +2,7 @@
 
 ## Normal workflow
 
-1. Install the project with the one-line installer from the README (or `git clone` and `./install.sh`). On a fresh install the setup wizard asks where notes should go, offers your Obsidian vaults, and asks how summaries should be made; change any of it later in the [control panel](panel.md) (the "USB Audio Transcriber" entry in your app menu) or by running `bin/setup.py` again. Re-running the same one-liner later updates the installation.
+1. Install the project with the one-line installer from the README (or `git clone` and `./install.sh`, or `pipx install` and `usb-audio-transcriber install`). On a fresh install the setup wizard asks where notes should go, offers your Obsidian vaults, and asks how summaries should be made; change any of it later in the [control panel](panel.md) (the "USB Audio Transcriber" entry in your app menu) or by running `bin/setup.py` again. Re-running the same one-liner later updates the installation.
 2. Keep `usb-audio-transcriber.timer` enabled.
 3. Mount or plug in removable media containing audio directly inside the configured recorder directory, `RECORD` by default.
 4. A cycle starts a few seconds after the drive mounts (the plug-in trigger watches the mount folders). The timer is the fallback and scans about once a minute, which also covers folders in `WATCH_DIRS`.
@@ -32,10 +32,26 @@ journalctl --user-unit=usb-audio-transcriber.service -f
 Running the installed script directly is also possible:
 
 ```bash
-~/.local/share/usb-audio-transcriber/bin/run-cycle.sh
+~/.local/share/usb-audio-transcriber/bin/run-cycle.sh   # one-line installer or clone
+usb-audio-transcriber cycle                             # pipx
 ```
 
 Its lock causes a second overlapping invocation to exit safely.
+
+## The same commands with pipx
+
+With a pipx install every script below is a subcommand of `usb-audio-transcriber`, run with the package's own environment, so the `PYTHON=...` and `APP=...` lines are not needed:
+
+```bash
+usb-audio-transcriber sessions list
+usb-audio-transcriber search roof leak
+usb-audio-transcriber model-cache status both
+usb-audio-transcriber benchmark /path/to/recording.wav --profile both
+usb-audio-transcriber doctor
+usb-audio-transcriber setup
+usb-audio-transcriber panel open
+usb-audio-transcriber paths          # where the settings, log, and program files are
+```
 
 ## Output files
 

@@ -5,6 +5,7 @@
 ```bash
 ~/.local/share/usb-audio-transcriber/venv/bin/python \
   ~/.local/share/usb-audio-transcriber/bin/doctor.py
+usb-audio-transcriber doctor      # pipx install
 systemctl --user status usb-audio-transcriber.timer
 systemctl --user status usb-audio-transcriber-plug.path
 systemctl --user status usb-audio-transcriber.service
@@ -84,9 +85,13 @@ $PYTHON $APP/bin/model-cache.py download fast
 
 Check free disk space and network access. For GPU configurations, verify that the selected `WHISPER_DEVICE` and `WHISPER_COMPUTE` are supported by the installed CTranslate2 stack. Switching back to `cpu` / `int8` is the conservative diagnostic baseline.
 
+## The control panel opens in a browser instead of a window
+
+The window needs the GTK bindings for the system's `python3`: on Debian and Ubuntu `sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`, then open it again. `bin/panel.py open` prints a one-line reason on the terminal when it falls back to the browser, and `bin/app.py --connect URL --token-file PATH` (the command it runs) shows any GTK error directly; add `--verbose` to see every request the window makes.
+
 ## The control panel does not open
 
-- `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` starts one itself and prints the link.
+- `systemctl --user status usb-audio-transcriber-panel.service` shows whether the server is running; `bin/panel.py open` (`usb-audio-transcriber panel open` with pipx) starts one itself and prints the link.
 - "This panel needs its private link" means the browser has no token: open it from the app menu or with `bin/panel.py open` rather than by typing the address.
 - If the port is taken, change `PANEL_PORT` in `config.env` and restart the service.
 - Buttons that need systemd (run now, pause, resume) are disabled where systemd is not available.

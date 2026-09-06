@@ -330,6 +330,24 @@ class PanelServerTests(unittest.TestCase):
         status, body, _ = self.request("/api/jobs", "POST", {"kind": "rebuild", "params": {"date": "yesterday"}})
         self.assertEqual(status, 400)
 
+    def test_job_output_streams_while_the_job_runs(self):
+        (self.fx.bin / "doctor.py").write_text(
+            "import sys, time\nprint('OK  first line', flush=True)\ntime.sleep(1.5)\n"
+            "print('FAIL last line', flush=True)\nsys.exit(1)\n", encoding="utf-8")
+        status, body, _ = self.request("/api/jobs", "POST", {"kind": "doctor", "params": {}})
+        self.assertEqual(status, 202, body)
+        for _ in range(100):
+            jobs = json.loads(self.request("/api/jobs")[1])
+            if "first line" in jobs[0]["output"]:
+                break
+            time.sleep(0.05)
+        self.assertEqual(jobs[0]["status"], "running", "the first line shows before the job ends")
+        self.assertNotIn("last line", jobs[0]["output"])
+        jobs = self.wait_jobs()
+        self.assertEqual(jobs[0]["status"], "failed")
+        self.assertEqual(jobs[0]["returncode"], 1)
+        self.assertIn("FAIL last line", jobs[0]["output"])
+
     def test_log_and_vaults_endpoints(self):
         (self.fx.root / "pipeline.log").write_text("one\ntwo\nthree\n", encoding="utf-8")
         status, body, _ = self.request("/api/log?lines=2")
@@ -358,6 +376,16 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(command[0], "bash")
             with self.assertRaises(ValueError):
                 panel.job_command("summarize", {"backend": "telepathy", "ids": ["a"]})
+
+    def test_the_panel_opens_as_its_own_window_where_a_browser_allows_it(self):
+        panel = load_panel()
+        url = "http://127.0.0.1:8765/?token=abc"
+        with mock.patch.object(panel.shutil, "which",
+                               side_effect=lambda name: "/usr/bin/brave-browser" if name == "brave-browser" else None):
+            command = panel.app_window_command(url)
+        self.assertEqual(command[:2], ["/usr/bin/brave-browser", f"--app={url}"])
+        with mock.patch.object(panel.shutil, "which", return_value=None):
+            self.assertIsNone(panel.app_window_command(url), "no such browser: fall back to a tab")
 
     def test_private_link_carries_the_token(self):
         panel = load_panel()

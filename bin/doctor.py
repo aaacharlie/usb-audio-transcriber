@@ -259,7 +259,8 @@ def main(argv=None):
         else:
             failures.append(
                 "Python package: pyannote.audio not importable "
-                "(run ./install.sh --with-diarization)"
+                "(run ./install.sh --with-diarization, or with pipx: "
+                "usb-audio-transcriber install --with-diarization)"
             )
 
     if config:

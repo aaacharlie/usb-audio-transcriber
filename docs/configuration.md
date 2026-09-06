@@ -6,7 +6,7 @@ The installed configuration is:
 ~/.local/share/usb-audio-transcriber/config.env
 ```
 
-`install.sh` creates it from `config.example.env` only when it does not already exist, so reinstalling does not overwrite local settings. On that first install the setup wizard (`bin/setup.py`) fills in `VAULT_DIR`, `SESSION_SUBJECT`, and optionally `OPENROUTER_API_KEY`; run it again whenever you want to change them without editing the file.
+`install.sh` (and `usb-audio-transcriber install` for a pipx install) creates it from `config.example.env` only when it does not already exist, so reinstalling does not overwrite local settings. On that first install the setup wizard (`bin/setup.py`) fills in `VAULT_DIR`, `SESSION_SUBJECT`, and optionally `OPENROUTER_API_KEY`; run it again whenever you want to change them without editing the file. The environment variable `USB_AUDIO_TRANSCRIBER_ROOT` moves the whole data folder (`config.env` and `var/`) somewhere else.
 
 The installer validates the configuration before enabling the timer. Re-run the
 same validation after editing settings:
@@ -14,6 +14,7 @@ same validation after editing settings:
 ```bash
 ~/.local/share/usb-audio-transcriber/venv/bin/python \
   ~/.local/share/usb-audio-transcriber/bin/doctor.py
+usb-audio-transcriber doctor      # pipx
 ```
 
 ## Paths
