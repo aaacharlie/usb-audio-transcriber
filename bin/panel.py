@@ -15,6 +15,7 @@ the private token created at first start.
 """
 import argparse
 import json
+import os
 import secrets
 import shutil
 import socket
@@ -854,6 +855,13 @@ def detached(command):
                      stderr=subprocess.DEVNULL, close_fds=True, start_new_session=True)
 
 
+def launch(command):
+    """Become the window: the process the desktop started is then the window's own,
+    so the desktop's activation token (the permission to take focus) and its
+    launch tracking reach it unchanged."""
+    os.execv(command[0], command)
+
+
 def ensure_server():
     """Start the server if the service is not running; return its base URL."""
     host, port = bind_settings()
@@ -891,7 +899,7 @@ def open_panel(argv):
         print("The desktop window needs the GTK bindings (sudo apt install python3-gi "
               "gir1.2-gtk-4.0 gir1.2-adw-1); opening the web page instead.", file=sys.stderr)
         return open_web(base)
-    detached([python, str(BIN / "app.py"), "--connect", base, "--token-file", str(TOKEN_FILE)])
+    launch([python, str(BIN / "app.py"), "--connect", base, "--token-file", str(TOKEN_FILE)])
     return 0
 
 

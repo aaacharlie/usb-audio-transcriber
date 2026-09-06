@@ -1261,6 +1261,9 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
                     GLib.timeout_add(600, lambda: (on_ready(self.window), False)[1])
             self.window.present()
 
+    # On X11 the window's class comes from the program name; the desktop matches
+    # it against StartupWMClass in the menu entry to show the icon and track the window.
+    GLib.set_prgname(APP_ID)
     application = App()
     try:
         application.register(None)

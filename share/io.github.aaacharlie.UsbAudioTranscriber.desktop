@@ -9,7 +9,10 @@ Icon=@ICON@
 Terminal=false
 Categories=AudioVideo;Audio;Utility;
 Keywords=transcribe;whisper;recorder;notes;obsidian;
-StartupNotify=false
+# The desktop hands the launch an activation token only with this on; without
+# it, raising an already open window is refused as focus stealing and the
+# desktop shows a "USB Audio Transcriber is ready" notice instead.
+StartupNotify=true
 # The window's application id; lets the dock match the running window to this
 # entry (its icon) on X11 as well as Wayland.
 StartupWMClass=io.github.aaacharlie.UsbAudioTranscriber
