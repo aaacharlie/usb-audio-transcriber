@@ -3,6 +3,7 @@
 [![CI](https://github.com/aaacharlie/usb-audio-transcriber/actions/workflows/ci.yml/badge.svg)](https://github.com/aaacharlie/usb-audio-transcriber/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux-informational.svg)](#requirements)
+[![PyPI](https://img.shields.io/pypi/v/usb-audio-transcriber.svg)](https://pypi.org/project/usb-audio-transcriber/)
 
 **Plug in a voice recorder. Walk away. Come back to timestamped, searchable notes and a summary of the whole session.**
 
@@ -29,7 +30,7 @@ Prefer pipx? The same program is a Python package with a `usb-audio-transcriber`
 
 ```bash
 sudo apt install pipx ffmpeg zenity libnotify-bin
-pipx install git+https://github.com/aaacharlie/usb-audio-transcriber   # pipx install usb-audio-transcriber once it is on PyPI
+pipx install usb-audio-transcriber
 usb-audio-transcriber install
 ```
 
@@ -169,7 +170,7 @@ cd usb-audio-transcriber
 
 ```bash
 sudo apt install pipx ffmpeg zenity libnotify-bin
-pipx install git+https://github.com/aaacharlie/usb-audio-transcriber   # or, once published: pipx install usb-audio-transcriber
+pipx install usb-audio-transcriber          # the package on PyPI; git+https://github.com/aaacharlie/usb-audio-transcriber for the latest main
 usb-audio-transcriber install     # add --with-diarization for speaker labels
 ```
 

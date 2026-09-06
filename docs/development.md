@@ -94,7 +94,7 @@ The `publish` job uses PyPI's trusted publishing (no API token to store) and onl
 1. Create a PyPI account at <https://pypi.org/account/register/> and enable two-factor authentication (PyPI requires it).
 2. Open <https://pypi.org/manage/account/publishing/> and, under "Add a new pending publisher", fill in: PyPI project name `usb-audio-transcriber`, owner `aaacharlie`, repository `usb-audio-transcriber`, workflow name `release.yml`, environment name `pypi`.
 3. In the GitHub repository open Settings, Secrets and variables, Actions, the Variables tab, and add a repository variable `PUBLISH_TO_PYPI` with the value `true`.
-4. Run the Release workflow. The first successful upload creates the PyPI project; from then on `pipx install usb-audio-transcriber` works, and the README's `git+https://...` line can become the plain package name.
+4. Run the Release workflow. The first successful upload creates the PyPI project; from then on `pipx install usb-audio-transcriber` installs the latest release. (Done for 1.1.0: <https://pypi.org/project/usb-audio-transcriber/>.)
 
 ## Submitting changes
 
