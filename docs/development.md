@@ -82,7 +82,7 @@ Changes should preserve these properties:
 
 ## Releases
 
-1. Update `CHANGELOG.md`: give the top section the new version number and date.
+1. Update `CHANGELOG.md`: rename the `## [Unreleased]` heading to `## [1.1.0] - 2026-09-06` (the new version and today's date) and start a fresh `## [Unreleased]` above it. The workflow refuses to release a version that has no section, with a message saying exactly this.
 2. Merge to `main`.
 3. On GitHub open Actions, choose the Release workflow, click "Run workflow", and enter the version (for example `1.0.0`). The workflow runs the checks, tags `v1.0.0` on `main`, and publishes a GitHub release whose notes are that changelog section. Pushing a `v*` tag by hand publishes the release the same way.
 4. The workflow's `publish` job then builds the package at that tag and uploads it to PyPI, once publishing is switched on (below). No version number lives in the code: the package version is the tag.

@@ -24,7 +24,9 @@ def main(argv):
     version = argv[1].lstrip("v")
     body = section(Path("CHANGELOG.md").read_text(encoding="utf-8"), version)
     if body is None:
-        sys.exit(f"CHANGELOG.md has no section for version {version}")
+        sys.exit(f"CHANGELOG.md has no section for version {version}. Before releasing, rename the "
+                 f"'## [Unreleased]' heading in CHANGELOG.md to '## [{version}] - YYYY-MM-DD' (today's "
+                 "date), merge that, then run the Release workflow again.")
     print(body)
     print(f"\nFull changelog: {REPO}/blob/main/CHANGELOG.md")
 

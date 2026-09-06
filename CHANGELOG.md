@@ -4,13 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.1.0] - 2026-09-06
+
+The control panel becomes a real desktop window, summaries can use a tool you already pay for, and the program is a pipx package.
+
 ### Added
 
-- The desktop window keeps one instance per session (a second launch raises the window), carries the app icon in the dock (the menu entry and icon are now named after the window's id, `io.github.aaacharlie.UsbAudioTranscriber`), and got a face: a status card on Home with the icon, the pipeline's state in one line, a progress bar while transcribing, and icons on every row; page titles use the desktop's accent colour.
-- Clicking the app while its window is buried now raises the window. The menu entry asks the desktop for an activation token (`StartupNotify=true`), `panel.py open` becomes the window process instead of spawning it, and the window carries its id as its X11 class, so the desktop treats the click as permission to take focus rather than showing "USB Audio Transcriber is ready".
-- The menu entry names the icon by its full path, the installer bumps the icon theme folder and refreshes a stale `icon-theme.cache`, so the microphone shows in the menu and the dock right after an update; a leftover cache had turned it into a gear.
-- Updating restarts a running panel server (`systemctl --user try-restart`), so the new code is what the window talks to straight away.
-- The panel's status no longer walks every mounted drive on every refresh: the "on the recorder" count is refreshed in the background at most every 30 seconds, `bin/ingest.py` skips hidden and system folders and looks at most four levels deep for the recorder's folder, and the window never stacks status requests, keeps the last good values, and reports an outage only after two failures in a row. Before, an external drive with many files made `/api/status` time out ("Panel unreachable") and kept the disk busy.
 - The control panel is a desktop window: `bin/app.py`, a native GTK 4 / libadwaita app with the same pages as the web panel (home, sessions, recordings, search, settings, tools), talking to the panel server's local API. The app-menu entry and `panel.py open` start it when the GTK bindings are installed (`python3-gi gir1.2-gtk-4.0 gir1.2-adw-1`) and fall back to the web page otherwise; `--page` opens on a given page, `--web` and `--browser` choose the web page. `GET /api/link` returns the private link for another device.
 - pipx and PyPI packaging (#10): `pyproject.toml` builds a wheel whose `usb-audio-transcriber` command wraps every script (`install`, `uninstall`, `update`, `cycle`, `panel`, `doctor`, `setup`, `sessions`, `search`, `model-cache`, `benchmark`, `paths`). `usb-audio-transcriber install` writes the same units and menu entry as `install.sh`, against the same `~/.local/share/usb-audio-transcriber/config.env`, so the two install paths are interchangeable. The version is the git tag, CI installs the built wheel with pipx, and the Release workflow gains a PyPI `publish` job that runs once trusted publishing is configured. `USB_AUDIO_TRANSCRIBER_ROOT` moves the data folder; `install.sh` and `bootstrap.sh` are unchanged for users.
 - The control panel (`bin/panel.py`, an app-menu entry, and `usb-audio-transcriber-panel.service`): a token-protected local web app with the pipeline's state, sessions with a Summarize button and backend picker, recordings, search, every setting as a validated form (with "Find my Obsidian vault"), and tools for the doctor, search index, model cache, session rebuilds, and the log. `sessions.py summarize --id` and `--backend` back its actions from the terminal. Every button shows its result, streamed while it runs, in an Activity box on the page where it was pressed, and the panel opens as its own window when Chrome, Chromium, Brave, or Edge is installed (`panel.py open --browser` forces a tab).
@@ -18,6 +19,14 @@ All notable changes to this project are documented here. The format follows [Kee
 - `SESSION_BACKFILL_DAYS` (default 7): on an installation with history, sessions that ended more than that many days ago get notes without an automatic AI summary, and a cycle that writes more than three session notes sends one notification instead of one per note. `sessions.py retry` summarizes older sessions on demand.
 - Full-text search across all transcripts (`bin/search.py`): an FTS5 index in the state database, refreshed every cycle, with `--since`, `--speaker`, prefix, `--raw`, and `--json` options. (#11)
 - `WHISPER_TASK="translate"` translates speech in other languages straight into English instead of transcribing it; the task is validated by the doctor and recorded in each note's front matter (#13, contributed by @anni-x1).
+
+### Fixed
+
+- The desktop window keeps one instance per session (a second launch raises the window), carries the app icon in the dock (the menu entry and icon are now named after the window's id, `io.github.aaacharlie.UsbAudioTranscriber`), and got a face: a status card on Home with the icon, the pipeline's state in one line, a progress bar while transcribing, and icons on every row; page titles use the desktop's accent colour.
+- Clicking the app while its window is buried now raises the window. The menu entry asks the desktop for an activation token (`StartupNotify=true`), `panel.py open` becomes the window process instead of spawning it, and the window carries its id as its X11 class, so the desktop treats the click as permission to take focus rather than showing "USB Audio Transcriber is ready".
+- The menu entry names the icon by its full path, the installer bumps the icon theme folder and refreshes a stale `icon-theme.cache`, so the microphone shows in the menu and the dock right after an update; a leftover cache had turned it into a gear.
+- Updating restarts a running panel server (`systemctl --user try-restart`), so the new code is what the window talks to straight away.
+- The panel's status no longer walks every mounted drive on every refresh: the "on the recorder" count is refreshed in the background at most every 30 seconds, `bin/ingest.py` skips hidden and system folders and looks at most four levels deep for the recorder's folder, and the window never stacks status requests, keeps the last good values, and reports an outage only after two failures in a row. Before, an external drive with many files made `/api/status` time out ("Panel unreachable") and kept the disk busy.
 
 ## [1.0.0] - 2026-09-05
 
