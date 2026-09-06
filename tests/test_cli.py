@@ -111,8 +111,9 @@ class InstallTests(unittest.TestCase):
         desktop = (machine.data_home / "applications" / f"{cli.APP_ID}.desktop")
         self.assertIn(f"Exec={quoted} panel open\n", desktop.read_text(encoding="utf-8"))
         self.assertIn(f"StartupWMClass={cli.APP_ID}\n", desktop.read_text(encoding="utf-8"))
-        self.assertTrue((machine.data_home / "icons" / "hicolor" / "scalable" / "apps" /
-                         f"{cli.APP_ID}.svg").is_file())
+        icon = machine.data_home / "icons" / "hicolor" / "scalable" / "apps" / f"{cli.APP_ID}.svg"
+        self.assertTrue(icon.is_file())
+        self.assertIn(f"Icon={icon}\n", desktop.read_text(encoding="utf-8"))
         recorded = machine.calls.read_text(encoding="utf-8").splitlines()
         self.assertEqual(recorded[0], "--user daemon-reload")
         for unit in ("usb-audio-transcriber.timer", "usb-audio-transcriber-plug.path",
@@ -235,11 +236,33 @@ class ForwardingTests(unittest.TestCase):
         self.assertIn("unknown command", err)
 
     def test_render_quotes_the_command_and_doubles_percent_signs(self):
-        rendered = cli.render("ExecStart=@CYCLE_COMMAND@ --wait\nExec=@PANEL_COMMAND@ open\n",
-                              Path("/home/me/100% mine/bin/usb-audio-transcriber"))
+        rendered = cli.render("ExecStart=@CYCLE_COMMAND@ --wait\nExec=@PANEL_COMMAND@ open\nIcon=@ICON@\n",
+                              Path("/home/me/100% mine/bin/usb-audio-transcriber"),
+                              Path("/home/me/100% mine/icons/app.svg"))
         self.assertEqual(rendered,
                          'ExecStart="/home/me/100%% mine/bin/usb-audio-transcriber" cycle --wait\n'
-                         'Exec="/home/me/100%% mine/bin/usb-audio-transcriber" panel open\n')
+                         'Exec="/home/me/100%% mine/bin/usb-audio-transcriber" panel open\n'
+                         'Icon=/home/me/100% mine/icons/app.svg\n')
+
+    def test_a_stale_icon_cache_is_refreshed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            theme = Path(directory) / "hicolor"
+            theme.mkdir()
+            (theme / "icon-theme.cache").write_bytes(b"stale")
+            fakebin = Path(directory) / "bin"
+            fakebin.mkdir()
+            calls = Path(directory) / "calls"
+            tool = fakebin / "gtk-update-icon-cache"
+            tool.write_text(f"#!/usr/bin/env bash\necho \"$*\" >> '{calls}'\n", encoding="utf-8")
+            tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
+            with mock.patch.dict(os.environ, {"PATH": f"{fakebin}:/usr/bin:/bin"}):
+                cli.refresh_icon_theme(theme)
+            self.assertEqual(calls.read_text(encoding="utf-8").strip(), f"-q -t -f {theme}")
+            (theme / "icon-theme.cache").unlink()
+            calls.unlink()
+            with mock.patch.dict(os.environ, {"PATH": f"{fakebin}:/usr/bin:/bin"}):
+                cli.refresh_icon_theme(theme)
+            self.assertFalse(calls.exists(), "no cache, nothing to refresh")
 
     def test_default_data_root_matches_install_sh(self):
         with mock.patch.dict(os.environ, {"XDG_DATA_HOME": "/xdg/data"}):

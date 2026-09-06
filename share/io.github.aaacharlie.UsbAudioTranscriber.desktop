@@ -3,7 +3,9 @@ Type=Application
 Name=USB Audio Transcriber
 Comment=Transcripts, session summaries, search, and settings for your voice recorder pipeline
 Exec=@PANEL_COMMAND@ open
-Icon=io.github.aaacharlie.UsbAudioTranscriber
+# The installer fills in the absolute path of the installed icon: a path needs
+# no icon-theme cache refresh, so the icon shows right after an update.
+Icon=@ICON@
 Terminal=false
 Categories=AudioVideo;Audio;Utility;
 Keywords=transcribe;whisper;recorder;notes;obsidian;

@@ -77,7 +77,8 @@ class InstallTests(unittest.TestCase):
             app_id = "io.github.aaacharlie.UsbAudioTranscriber"
             desktop = (data_home / "applications" / f"{app_id}.desktop").read_text(encoding="utf-8")
             self.assertIn(f'"{escaped_root}/usb-audio-transcriber/bin/panel.py" open', desktop)
-            self.assertIn(f"Icon={app_id}", desktop)
+            self.assertIn(f"Icon={data_home}/icons/hicolor/scalable/apps/{app_id}.svg\n", desktop,
+                          "the icon is named by path, so no icon cache can hide it")
             self.assertIn(f"StartupWMClass={app_id}", desktop)
             self.assertTrue(
                 (data_home / "icons" / "hicolor" / "scalable" / "apps" / f"{app_id}.svg").is_file()

@@ -165,15 +165,17 @@ def systemctl(*args, check=True):
 
 # --------------------------------------------------------------------------- install
 
-def render(template, command):
-    """Fill a unit or desktop template with this installation's launcher.
+def render(template, command, icon=None):
+    """Fill a unit or desktop template with this installation's launcher and icon.
 
-    systemd and desktop entries both treat % specially, so it is doubled, and
-    the path is quoted because home folders can contain spaces.
+    systemd and desktop entries both treat % specially in commands, so it is
+    doubled there, and the path is quoted because home folders can contain
+    spaces. The icon is a plain path (Icon= takes no field codes).
     """
     quoted = '"' + str(command).replace("%", "%%") + '"'
     return (template.replace("@CYCLE_COMMAND@", f"{quoted} cycle")
-                    .replace("@PANEL_COMMAND@", f"{quoted} panel"))
+                    .replace("@PANEL_COMMAND@", f"{quoted} panel")
+                    .replace("@ICON@", "" if icon is None else str(icon)))
 
 
 def has_display():
@@ -248,12 +250,14 @@ def install(args, root):
     icons = data_home() / "icons" / "hicolor" / "scalable" / "apps"
     applications.mkdir(parents=True, exist_ok=True)
     icons.mkdir(parents=True, exist_ok=True)
+    icon = icons / f"{APP_ID}.svg"
+    shutil.copy(ASSETS / "share" / f"{APP_ID}.svg", icon)
     desktop = (ASSETS / "share" / f"{APP_ID}.desktop").read_text(encoding="utf-8")
-    (applications / f"{APP_ID}.desktop").write_text(render(desktop, command), encoding="utf-8")
-    shutil.copy(ASSETS / "share" / f"{APP_ID}.svg", icons / f"{APP_ID}.svg")
+    (applications / f"{APP_ID}.desktop").write_text(render(desktop, command, icon), encoding="utf-8")
     # Earlier versions installed the entry under the plain name.
     (applications / f"{APP_NAME}.desktop").unlink(missing_ok=True)
     (icons / f"{APP_NAME}.svg").unlink(missing_ok=True)
+    refresh_icon_theme(data_home() / "icons" / "hicolor")
     refresher = shutil.which("update-desktop-database")
     if refresher:
         subprocess.run([refresher, str(applications)], capture_output=True, check=False)
@@ -271,6 +275,22 @@ def install(args, root):
           f"Control panel: \"USB Audio Transcriber\" in your app menu, or {APP_NAME} panel open\n"
           f"Change where notes go: the panel's Settings page, or {APP_NAME} setup")
     return 0
+
+
+def refresh_icon_theme(theme_dir):
+    """GTK trusts an icon-theme cache until the theme folder itself changes, so a
+    stale cache would hide a new icon name: bump the folder, refresh a cache if there is one."""
+    try:
+        os.utime(theme_dir)
+    except OSError:
+        return
+    if not (theme_dir / "icon-theme.cache").exists():
+        return
+    for tool in ("gtk-update-icon-cache", "gtk4-update-icon-cache"):
+        found = shutil.which(tool)
+        if found:
+            subprocess.run([found, "-q", "-t", "-f", str(theme_dir)], capture_output=True, check=False)
+            return
 
 
 def inject_diarization():

@@ -8,6 +8,8 @@ APP_ID=io.github.aaacharlie.UsbAudioTranscriber
 SOURCE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/$APP_NAME"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+ICON_PATH="$DATA_HOME/icons/hicolor/scalable/apps/$APP_ID.svg"
 
 WITH_DIARIZATION=0
 RUN_SETUP=1
@@ -91,7 +93,8 @@ panel_command="\"$rendered_root/venv/bin/python\" \"$rendered_root/bin/panel.py\
 render() {
   local text=$1
   text="${text//@CYCLE_COMMAND@/"$cycle_command"}"
-  printf '%s\n' "${text//@PANEL_COMMAND@/"$panel_command"}"
+  text="${text//@PANEL_COMMAND@/"$panel_command"}"
+  printf '%s\n' "${text//@ICON@/"$ICON_PATH"}"
 }
 for unit in "$APP_NAME.service" "$APP_NAME-plug.service" "$APP_NAME-panel.service"; do
   render "$(<"$SOURCE_ROOT/systemd/$unit")" > "$UNIT_DIR/$unit"
@@ -105,15 +108,27 @@ systemctl --user enable --now "$APP_NAME-panel.service"
 # A panel server that was already running is still the old code.
 systemctl --user try-restart "$APP_NAME-panel.service"
 
-# App menu entry and icon for the control panel.
-DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+# App menu entry and icon for the control panel. The entry points at the icon
+# file by absolute path; the copy in the icon theme serves the window itself.
 mkdir -p "$DATA_HOME/applications" "$DATA_HOME/icons/hicolor/scalable/apps"
+cp "$SOURCE_ROOT/share/$APP_ID.svg" "$ICON_PATH"
 render "$(<"$SOURCE_ROOT/share/$APP_ID.desktop")" \
   > "$DATA_HOME/applications/$APP_ID.desktop"
-cp "$SOURCE_ROOT/share/$APP_ID.svg" "$DATA_HOME/icons/hicolor/scalable/apps/$APP_ID.svg"
 # Earlier versions installed the entry under the plain name.
 rm -f "$DATA_HOME/applications/$APP_NAME.desktop" \
   "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg"
+# GTK trusts an icon-theme cache until the theme folder itself changes, so a
+# stale cache would hide the new icon name; bump the folder and refresh the
+# cache where one exists.
+touch "$DATA_HOME/icons/hicolor"
+if [ -f "$DATA_HOME/icons/hicolor/icon-theme.cache" ]; then
+  for tool in gtk-update-icon-cache gtk4-update-icon-cache; do
+    if command -v "$tool" >/dev/null; then
+      "$tool" -q -t -f "$DATA_HOME/icons/hicolor" 2>/dev/null || true
+      break
+    fi
+  done
+fi
 command -v update-desktop-database >/dev/null && \
   update-desktop-database "$DATA_HOME/applications" 2>/dev/null || true
 

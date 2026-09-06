@@ -23,7 +23,7 @@ class NoteParsingTests(unittest.TestCase):
     def test_the_menu_entry_and_icon_carry_the_window_id(self):
         share = ROOT / "share"
         desktop = (share / f"{self.app.APP_ID}.desktop").read_text(encoding="utf-8")
-        self.assertIn(f"Icon={self.app.APP_ID}\n", desktop)
+        self.assertIn("Icon=@ICON@\n", desktop, "the installer fills in the icon's path")
         self.assertIn(f"StartupWMClass={self.app.APP_ID}\n", desktop)
         self.assertTrue((share / f"{self.app.APP_ID}.svg").is_file())
         self.assertEqual(self.app.APP_ICON_FILE, share / f"{self.app.APP_ID}.svg")
