@@ -25,6 +25,8 @@ class NoteParsingTests(unittest.TestCase):
         desktop = (share / f"{self.app.APP_ID}.desktop").read_text(encoding="utf-8")
         self.assertIn("Icon=@ICON@\n", desktop, "the installer fills in the icon's path")
         self.assertIn(f"StartupWMClass={self.app.APP_ID}\n", desktop)
+        self.assertIn("StartupNotify=true\n", desktop,
+                      "without startup notification the desktop refuses to raise the window")
         self.assertTrue((share / f"{self.app.APP_ID}.svg").is_file())
         self.assertEqual(self.app.APP_ICON_FILE, share / f"{self.app.APP_ID}.svg")
 
@@ -134,14 +136,14 @@ class OpenFlowTests(unittest.TestCase):
         with mock.patch.object(panel.subprocess, "run", return_value=mock.Mock(returncode=1)):
             self.assertIsNone(panel.gui_python())
 
-    def test_open_launches_the_window_with_the_token_file_not_the_token(self):
+    def test_open_becomes_the_window_with_the_token_file_not_the_token(self):
         panel = load("panel")
         launched = []
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(panel, "ensure_server", return_value="http://127.0.0.1:8765/"), \
                     mock.patch.object(panel, "TOKEN_FILE", Path(directory) / "token"), \
                     mock.patch.object(panel, "gui_python", return_value="/usr/bin/python3"), \
-                    mock.patch.object(panel, "detached", launched.append):
+                    mock.patch.object(panel, "launch", launched.append):
                 code = panel.open_panel(mock.Mock(no_browser=False, browser=False, web=False))
         self.assertEqual(code, 0)
         command = launched[0]
@@ -162,6 +164,12 @@ class OpenFlowTests(unittest.TestCase):
                 panel.open_panel(mock.Mock(no_browser=False, browser=False, web=False))
                 panel.open_panel(mock.Mock(no_browser=False, browser=True, web=False))
         self.assertEqual(opened, [("http://127.0.0.1:8765/", False), ("http://127.0.0.1:8765/", True)])
+
+    def test_launch_replaces_the_process(self):
+        panel = load("panel")
+        with mock.patch.object(panel.os, "execv") as execv:
+            panel.launch(["/usr/bin/python3", "/x/app.py", "--connect", "u"])
+        execv.assert_called_once_with("/usr/bin/python3", ["/usr/bin/python3", "/x/app.py", "--connect", "u"])
 
 
 if __name__ == "__main__":
