@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from model_profiles import artifact_path, artifacts_complete, profiles_for_config
+from model_profiles import artifact_path, completed_layout, profiles_for_config
 from pipeline_config import load, log
 
 CFG = load()
@@ -71,10 +71,11 @@ def recordings(con):
     profile = transcript_profile()
     for (archived,) in rows:
         audio = Path(archived)
-        if not audio.is_file() or not artifacts_complete(audio, profile, COMPARISON):
+        layout = completed_layout(audio, profile, COMPARISON) if audio.is_file() else None
+        if layout is None:
             continue
-        sidecar = artifact_path(audio, profile, ".json", COMPARISON)
-        marker = artifact_path(audio, profile, ".complete.json", COMPARISON)
+        sidecar = artifact_path(audio, profile, ".json", layout)
+        marker = artifact_path(audio, profile, ".complete.json", layout)
         try:
             note = json.loads(marker.read_text(encoding="utf-8")).get("note") or ""
         except (OSError, json.JSONDecodeError):
@@ -203,8 +204,15 @@ def main(argv=None):
     if not args.index and not args.words:
         parser.error("give some words to search for, or --index")
 
+    if args.since:
+        try:
+            datetime.strptime(args.since, "%Y-%m-%d")
+        except ValueError:
+            parser.error("--since takes a date as YYYY-MM-DD")
     STATE_DB.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(STATE_DB)
+    # The cycle's other steps write the same database; wait for them instead of
+    # failing with "database is locked".
+    con = sqlite3.connect(STATE_DB, timeout=30)
     try:
         if not args.no_refresh:
             indexed, removed = refresh(con)

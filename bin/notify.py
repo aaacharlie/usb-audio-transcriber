@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Desktop notifications for finished transcripts, with click-to-open."""
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -46,10 +47,18 @@ def base_command(title, body):
     return ["notify-send", f"--app-name={APP_NAME}", f"--icon={ICON}", title, body]
 
 
-def detach(command):
+def detach(command, environ=None):
     """Start a process that outlives the pipeline without inheriting its
     pipes or the run-cycle lock descriptor (close_fds), so a lingering
-    notification can neither keep tee open nor block the next cycle."""
+    notification can neither keep tee open nor block the next cycle.
+
+    Under systemd (INVOCATION_ID is set) the cycle is a oneshot unit whose
+    whole process group is killed when it finishes, which would take the
+    click-to-open helper with it; systemd-run moves the helper into a scope
+    of its own so the click still works minutes later."""
+    environ = os.environ if environ is None else environ
+    if environ.get("INVOCATION_ID") and shutil.which("systemd-run"):
+        command = ["systemd-run", "--user", "--scope", "--quiet", "--collect", *command]
     return subprocess.Popen(
         command,
         stdin=subprocess.DEVNULL,

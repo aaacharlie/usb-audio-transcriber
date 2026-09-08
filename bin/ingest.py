@@ -16,7 +16,8 @@ CFG = load()
 ARCHIVE = Path(CFG["ARCHIVE_DIR"])
 QUEUE = Path(CFG["QUEUE_DIR"])
 STATE_DB = Path(CFG["STATE_DB"])
-EXTS = {entry.lower() for entry in CFG["AUDIO_EXTS"].split(",")}
+# "mp3, .wav" and "mp3,wav" mean the same thing here and in transcribe.py.
+EXTS = {entry.strip().lstrip(".").lower() for entry in CFG["AUDIO_EXTS"].split(",") if entry.strip()}
 RECORDER_DIR = CFG.get("RECORDER_DIR", "RECORD")
 PURGE = CFG.get("PURGE_DEVICE", "0") == "1"
 # Extra folders to scan recursively (sync folders, phone exports, network
@@ -84,18 +85,50 @@ SKIP_DIRS = {"lost+found", "System Volume Information", "$RECYCLE.BIN", "node_mo
 MAX_DEPTH = 4
 
 
+def usable_name(name):
+    """Linux allows file names that are not valid UTF-8; Python carries them as
+    surrogate escapes that SQLite refuses. Such a file is skipped, not imported."""
+    try:
+        name.encode("utf-8")
+    except UnicodeEncodeError:
+        log(f"  SKIP {name!r}: file name is not valid UTF-8, rename it to import it")
+        return False
+    return True
+
+
 def find_candidates():
     found = []
     for root in MOUNT_ROOTS:
         if not root.exists():
             continue
         try:
-            mounts = sorted(mount for mount in root.iterdir() if mount.is_dir())
+            # A symlink under /mnt that points into a home folder is not a drive.
+            mounts = sorted(mount for mount in root.iterdir()
+                            if mount.is_dir() and not mount.is_symlink())
         except OSError:
             continue
         for mount in mounts:
             found.extend(scan_mount(mount))
     return found
+
+
+def removable_device(path, sysfs="/sys", device=None):
+    """Whether `path` sits on a removable block device (a USB recorder): True, False,
+    or None when sysfs cannot say. Only recordings on removable drives are purged."""
+    try:
+        if device is None:
+            device = os.stat(path).st_dev
+        node = (Path(sysfs) / "dev" / "block" / f"{os.major(device)}:{os.minor(device)}").resolve()
+    except OSError:
+        return None
+    for candidate in (node, node.parent):  # a partition's flag lives on its disk
+        flag = candidate / "removable"
+        if flag.is_file():
+            try:
+                return flag.read_text(encoding="utf-8").strip() == "1"
+            except OSError:
+                return None
+    return None
 
 
 def scan_mount(mount, max_depth=MAX_DEPTH):
@@ -117,8 +150,10 @@ def scan_mount(mount, max_depth=MAX_DEPTH):
                                 pending.append((Path(entry.path), depth + 1))
                         elif (entry.is_file(follow_symlinks=False)
                                 and directory.name == RECORDER_DIR
+                                and not entry.name.startswith(".")  # macOS ._name.wav shadows
                                 and Path(entry.name).suffix.lstrip(".").lower() in EXTS
-                                and entry.stat(follow_symlinks=False).st_size > 4096):
+                                and entry.stat(follow_symlinks=False).st_size > 4096
+                                and usable_name(entry.name)):
                             found.append(Path(entry.path))
                     except OSError:
                         continue
@@ -149,6 +184,8 @@ def find_watch_candidates():
                     continue
                 if path.stat().st_size <= 4096:
                     continue
+                if not usable_name(path.name):
+                    continue
                 resolved = path.resolve()
                 if any(resolved == item or item in resolved.parents
                        for item in excluded):
@@ -171,25 +208,49 @@ def archive_path_for(src):
     return destination
 
 
+PARTIAL_SUFFIX = ".partial"
+
+
 def archive_from_source(src, digest):
     """Copy a recording into the archive, checksum it, and make it durable.
 
-    Returns the archived path, or None when the copy failed verification.
+    The copy is written under a temporary name and moved to its final name only
+    once verified and flushed, so an unplugged drive or a full disk never leaves
+    a truncated file under a real recording's name. Returns the archived path,
+    or None when the copy failed verification; raises OSError when the copy
+    itself failed (nothing is left behind).
     """
     destination = archive_path_for(src)
+    partial = destination.with_name(destination.name + PARTIAL_SUFFIX)
     log(f"  copy {src.name} -> {destination.name}")
-    shutil.copy2(src, destination)
-    destination.chmod(0o600)
-    if sha256(destination) != digest:
-        log("  !! checksum mismatch, discarding copy")
-        destination.unlink(missing_ok=True)
-        return None
     try:
-        sync_file_and_parent(destination)
+        shutil.copy2(src, partial)
+        partial.chmod(0o600)
+        if sha256(partial) != digest:
+            log("  !! checksum mismatch, discarding copy")
+            partial.unlink(missing_ok=True)
+            return None
+        sync_file_and_parent(partial)
+        os.replace(partial, destination)
+        sync_directory(destination.parent)
     except OSError:
-        destination.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
         raise
     return destination
+
+
+def sweep_partials():
+    """Remove copies a crashed or unplugged earlier cycle left half-written."""
+    removed = 0
+    try:
+        for leftover in ARCHIVE.rglob(f"*{PARTIAL_SUFFIX}"):
+            if leftover.is_file():
+                leftover.unlink(missing_ok=True)
+                removed += 1
+    except OSError:
+        pass
+    if removed:
+        log(f"Removed {removed} partial copy(ies) left by an interrupted cycle.")
 
 
 def ensure_queued(archived):
@@ -215,6 +276,7 @@ def main():
     try:
         write_progress(active=False, phase="Scanning for recordings", detected_files=0,
                        imported_files=0, files_completed=0)
+        sweep_partials()
         candidates = find_candidates()
         watched = find_watch_candidates()
         if not candidates and not watched:
@@ -224,7 +286,19 @@ def main():
 
         log(f"Found {len(candidates)} audio file(s) on mounted media"
             f" and {len(watched)} in watched folders.")
-        purgeable = set(candidates)
+        # Purging is for the recorder only: a backup disk or a network share
+        # mounted under the same roots keeps everything, whatever PURGE_DEVICE says.
+        purgeable = set()
+        kept_drives = set()
+        if PURGE:
+            for src in candidates:
+                if removable_device(src) is True:
+                    purgeable.add(src)
+                else:
+                    drive = src.parents[-2] if len(src.parents) > 1 else src.parent
+                    if drive not in kept_drives:
+                        kept_drives.add(drive)
+                        log(f"  {drive}: not a removable drive, its recordings are imported but never purged")
         imported = 0
         for src in candidates + watched:
             if not stable(src):
@@ -257,7 +331,11 @@ def main():
                         # Lost/corrupt archive but the source is still on
                         # the device: restore it. Purge waits for a later
                         # run's re-verification, so `verified` stays False.
-                        restored = archive_from_source(src, digest)
+                        try:
+                            restored = archive_from_source(src, digest)
+                        except OSError as exc:
+                            log(f"  SKIP {src.name}: copy failed ({exc})")
+                            continue
                         if restored is not None:
                             con.execute(
                                 "UPDATE seen SET archived_to=?, bytes=?, "
@@ -275,7 +353,7 @@ def main():
                                 log(f"  !! queue name conflict for "
                                     f"{restored.name}: not queued")
                 if PURGE and src not in purgeable:
-                    log("       kept: watched-folder sources are never purged")
+                    log("       kept: only recordings on a removable drive are purged")
                 elif PURGE:
                     if verified and queue_ready:
                         src.unlink(missing_ok=True)
@@ -284,7 +362,11 @@ def main():
                         log("       NOT purged: archive or pending queue is unverified")
                 continue
 
-            destination = archive_from_source(src, digest)
+            try:
+                destination = archive_from_source(src, digest)
+            except OSError as exc:
+                log(f"  SKIP {src.name}: copy failed ({exc})")
+                continue
             if destination is None:
                 continue
             con.execute(
@@ -300,7 +382,7 @@ def main():
                 continue
             imported += 1
             if PURGE and src not in purgeable:
-                log("       kept: watched-folder sources are never purged")
+                log("       kept: only recordings on a removable drive are purged")
             elif PURGE:
                 try:
                     src.unlink()

@@ -2,8 +2,16 @@
 set -euo pipefail
 
 APP_NAME=usb-audio-transcriber
+SOURCE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/$APP_NAME"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+
+# Program files are removed only from a deployed copy, never from a git clone
+# that happens to sit at the install folder.
+REMOVE_PROGRAM=1
+if [ "$(readlink -f "$SOURCE_ROOT")" = "$(readlink -f "$INSTALL_ROOT")" ] || [ -d "$INSTALL_ROOT/.git" ]; then
+  REMOVE_PROGRAM=0
+fi
 
 systemctl --user disable --now "$APP_NAME.timer" 2>/dev/null || true
 systemctl --user disable --now "$APP_NAME-plug.path" 2>/dev/null || true
@@ -16,11 +24,15 @@ rm -f "$DATA_HOME/applications/$APP_NAME.desktop" \
   "$DATA_HOME/icons/hicolor/scalable/apps/$APP_NAME.svg" \
   "$DATA_HOME/applications/io.github.aaacharlie.UsbAudioTranscriber.desktop" \
   "$DATA_HOME/icons/hicolor/scalable/apps/io.github.aaacharlie.UsbAudioTranscriber.svg"
-systemctl --user daemon-reload
-rm -rf "$INSTALL_ROOT/bin" "$INSTALL_ROOT/systemd" "$INSTALL_ROOT/prompts" \
-  "$INSTALL_ROOT/panel" "$INSTALL_ROOT/share" "$INSTALL_ROOT/venv"
-rm -f "$INSTALL_ROOT/VERSION"
-rm -f "$INSTALL_ROOT/requirements.txt" "$INSTALL_ROOT/requirements-diarization.txt" \
-  "$INSTALL_ROOT/config.example.env"
-rmdir "$INSTALL_ROOT" 2>/dev/null || true
-echo "Uninstalled program files and user systemd units. Local configuration, runtime state, archives, transcripts, and model caches were preserved."
+systemctl --user daemon-reload 2>/dev/null || true
+if [ "$REMOVE_PROGRAM" = 1 ]; then
+  rm -rf "$INSTALL_ROOT/bin" "$INSTALL_ROOT/systemd" "$INSTALL_ROOT/prompts" \
+    "$INSTALL_ROOT/panel" "$INSTALL_ROOT/share" "$INSTALL_ROOT/venv"
+  rm -f "$INSTALL_ROOT/VERSION"
+  rm -f "$INSTALL_ROOT/requirements.txt" "$INSTALL_ROOT/requirements-diarization.txt" \
+    "$INSTALL_ROOT/config.example.env"
+  rmdir "$INSTALL_ROOT" 2>/dev/null || true
+  echo "Uninstalled program files and user systemd units. Local configuration, runtime state, archives, transcripts, and model caches were preserved."
+else
+  echo "Removed the user systemd units and the menu entry. $INSTALL_ROOT is a git clone, so its files were left alone."
+fi

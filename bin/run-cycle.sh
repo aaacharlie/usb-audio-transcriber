@@ -7,6 +7,9 @@ BIN="${USB_AUDIO_TRANSCRIBER_BIN:-$ROOT/bin}"
 PYTHON="${USB_AUDIO_TRANSCRIBER_PYTHON:-$ROOT/venv/bin/python}"
 LOCK_WAIT="${USB_AUDIO_TRANSCRIBER_LOCK_WAIT:-300}"
 export USB_AUDIO_TRANSCRIBER_ROOT="$ROOT"
+# The steps below run under this script's lock; sessions.py takes it itself
+# when started from the panel or a terminal.
+export USB_AUDIO_TRANSCRIBER_IN_CYCLE=1
 mkdir -p "$ROOT/var/logs" "$ROOT/var/state"
 exec 9>"$ROOT/var/state/cycle.lock"
 if [ "${1:-}" = "--wait" ]; then

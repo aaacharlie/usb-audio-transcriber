@@ -322,7 +322,7 @@ class PanelServerTests(unittest.TestCase):
         hits = json.loads(body)
         self.assertEqual(hits[0]["speaker"], "Speaker 1")
         self.assertEqual(json.loads((self.fx.bin / "search.argv").read_text()),
-                         ["--json", "--limit", "100", "--since", "2026-09-01", "roof", "leak"])
+                         ["--json", "--limit", "100", "--since", "2026-09-01", "--", "roof", "leak"])
         status, body, _ = self.request("/api/search?q=")
         self.assertEqual(json.loads(body), [])
 

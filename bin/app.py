@@ -71,8 +71,9 @@ class Api:
         self.verbose = verbose
 
     def request(self, path, params=None, body=None):
-        if self.verbose:
-            print(f"api {'POST' if body is not None else 'GET'} {path} {params or ''} {body or ''}",
+        if self.verbose:  # keys only: a settings save carries API keys
+            shape = sorted(body) if isinstance(body, dict) else ""
+            print(f"api {'POST' if body is not None else 'GET'} {path} {params or ''} {shape}",
                   file=sys.stderr, flush=True)
         url = self.base + path
         if params:
@@ -228,6 +229,9 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             GLib.idle_add(lambda: (done(result, error), False)[1])
         threading.Thread(target=runner, daemon=True).start()
 
+    def esc(text):
+        return GLib.markup_escape_text(str(text if text is not None else ""))
+
     def pill(text, kind=""):
         label = Gtk.Label(label=text, valign=Gtk.Align.CENTER)
         label.add_css_class("pill")
@@ -313,6 +317,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
         def __init__(self, title, limit=None, empty="Nothing running. The result of every button appears here, while it runs."):
             self.limit = limit
             self.rows = {}
+            self.newest = None
             self.group = group(title)
             self.list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
             self.list.add_css_class("boxed-list")
@@ -334,13 +339,17 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
                     self.list.prepend(self.rows[job["id"]]["row"])
                 self.fill(self.rows[job["id"]], job)
             newest = visible[0]["id"] if visible else None
-            for ident, parts in self.rows.items():
-                parts["row"].set_expanded(ident == newest)
+            if newest != self.newest:  # a new job opens; what the person folded stays folded
+                if self.newest in self.rows:
+                    self.rows[self.newest]["row"].set_expanded(False)
+                if newest in self.rows:
+                    self.rows[newest]["row"].set_expanded(True)
+                self.newest = newest
             self.empty.set_visible(not visible)
             self.list.set_visible(bool(visible))
 
         def make_row(self, job):
-            row = Adw.ExpanderRow(title=job["label"])
+            row = Adw.ExpanderRow(title=esc(job["label"]))
             badge = pill("running")
             row.add_prefix(badge)
             scrolled, buffer = output_view()
@@ -383,13 +392,11 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             click.connect("released", self.on_click)
             self.view.add_controller(click)
             self.tags = {}
+            self.make_tags()
             self.render(note["text"])
 
-        def render(self, text):
-            buffer = self.view.get_buffer()
-            buffer.set_text("")
-            table = buffer.get_tag_table()
-            self.tags = {}
+        def make_tags(self):
+            table = self.view.get_buffer().get_tag_table()
             for name, props in (("h1", {"weight": Pango.Weight.BOLD, "scale": 1.6}),
                                 ("h2", {"weight": Pango.Weight.BOLD, "scale": 1.3}),
                                 ("h3", {"weight": Pango.Weight.BOLD, "scale": 1.1}),
@@ -404,6 +411,10 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
                     tag.set_property(key, value)
                 table.add(tag)
                 self.tags[name] = tag
+
+        def render(self, text):
+            buffer = self.view.get_buffer()
+            buffer.set_text("")
             self.links = []
             end = buffer.get_end_iter
             for block in parse_note(text):
@@ -534,7 +545,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             self.stack.set_visible_child_name(name)
 
         def toast(self, text):
-            self.toasts.add_toast(Adw.Toast.new(text))
+            self.toasts.add_toast(Adw.Toast.new(esc(text)))
 
         def set_state(self, text, kind):
             """The status bar and the Home headline say the same thing."""
@@ -680,7 +691,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
                         f"{model['gib']} GiB cached" if model["cached"] else "not downloaded")
             disk = s.get("disk")
             self.home["disk"].set_text(f"{disk['free_gib']} of {disk['total_gib']} GiB" if disk else "?")
-            self.vault_row.set_subtitle(s.get("vault") or "")
+            self.vault_row.set_subtitle(esc(s.get("vault") or ""))
             self.version_label.set_text(f"control panel {s.get('version', '')}")
             timer = (s.get("units") or {}).get("timer")
             paused = bool(timer) and timer.get("active") != "active"
@@ -745,6 +756,8 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
         def on_jobs(self, jobs, error):
             self.polling = False
             if error:
+                if any(j["status"] == "running" for j in self.jobs):
+                    GLib.timeout_add(3000, lambda: (self.poll_jobs(), False)[1])
                 return
             self.jobs = jobs or []
             for view in (self.jobs_home, self.jobs_tools, self.jobs_sessions, self.jobs_settings):
@@ -828,7 +841,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
             for session in self.sessions:
                 ended = (session.get("ended_at") or "")[11:16]
                 row = Adw.ActionRow(title=f"{when(session['started_at'])} to {ended}",
-                                    subtitle=session.get("note_name") or "")
+                                    subtitle=esc(session.get("note_name") or ""))
                 check = Gtk.CheckButton(valign=Gtk.Align.CENTER)
                 self.session_checks[session["id"]] = check
                 row.add_prefix(check)
@@ -890,7 +903,8 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
         def fill_recordings(self, listbox, rows):
             clear(listbox)
             for item in rows:
-                row = Adw.ActionRow(title=item["name"], subtitle=f"imported {when(item.get('imported_at'))}")
+                row = Adw.ActionRow(title=esc(item["name"]),
+                                    subtitle=f"imported {when(item.get('imported_at'))}")
                 row.add_suffix(pill("transcribed", "ok") if item.get("complete") else pill("waiting", "warn"))
                 if item.get("note"):
                     row.add_suffix(button(item.get("note_name") or "Note",
@@ -1114,7 +1128,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
                                       margin_bottom=12, margin_start=12, margin_end=12)
                 listbox.add_css_class("boxed-list")
                 for vault in vaults:
-                    row = Adw.ActionRow(title=Path(vault).name, subtitle=vault, activatable=True)
+                    row = Adw.ActionRow(title=esc(Path(vault).name), subtitle=esc(vault), activatable=True)
                     row.connect("activated", lambda _r, v=vault: (self.use_vault(v), picker.close()))
                     listbox.append(row)
                 box.append(Gtk.ScrolledWindow(child=listbox, vexpand=True))
@@ -1190,7 +1204,7 @@ def run_gui(base_url, token, page=None, verbose=False, on_ready=None):
         def load_link(self):
             def done(reply, error):
                 if not error and reply:
-                    self.link_row.set_subtitle(reply.get("url", ""))
+                    self.link_row.set_subtitle(esc(reply.get("url", "")))
             call(lambda: api.request("/api/link"), done)
 
         def copy_link(self):

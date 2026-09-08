@@ -1,6 +1,8 @@
 """Shared config loader and runtime state helpers for the audio pipeline."""
 import json
 import os
+import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +16,27 @@ ROOT = Path(os.environ.get("USB_AUDIO_TRANSCRIBER_ROOT", "").strip() or ASSETS).
 PROGRESS_PATH = ROOT / "var" / "state" / "progress.json"
 
 
+def unquote(raw):
+    """A value as written in config.env: one pair of outer quotes removed, and inside
+    double quotes \\" and \\\\ stand for a quote and a backslash (what quote() writes)."""
+    raw = raw.strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+        inner = raw[1:-1]
+        if raw[0] == '"':
+            inner = re.sub(r'\\(["\\])', r'\1', inner)
+        return inner
+    return raw
+
+
+def quote(value):
+    """The KEY="value" form of a value, the inverse of unquote(); line breaks are refused
+    because a second line would be read as another setting."""
+    value = str(value)
+    if "\n" in value or "\r" in value:
+        raise ValueError("a setting cannot contain a line break")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def load(path=None):
     cfg = {}
     path = ROOT / "config.env" if path is None else Path(path)
@@ -22,7 +45,7 @@ def load(path=None):
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, val = line.split("=", 1)
-        value = os.path.expandvars(val.strip().strip('"').strip("'"))
+        value = os.path.expandvars(unquote(val))
         cfg[key.strip()] = os.path.expanduser(value)
     return cfg
 
@@ -59,7 +82,11 @@ def has_display(environ=None):
 
 
 def log(msg):
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:  # a file name that is not valid UTF-8 must not stop a cycle
+        print(line.encode("utf-8", "replace").decode("utf-8"), flush=True)
 
 
 def read_progress():
@@ -76,6 +103,7 @@ def write_progress(**update):
     state.update(update)
     state["updated_at"] = datetime.now().isoformat(timespec="seconds")
     PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temp = PROGRESS_PATH.with_suffix(".tmp")
+    # A private temp name per writer: two writers must never trip over one .tmp.
+    temp = PROGRESS_PATH.with_name(f".{PROGRESS_PATH.name}.{os.getpid()}.tmp")
     temp.write_text(json.dumps(state), encoding="utf-8")
     temp.replace(PROGRESS_PATH)

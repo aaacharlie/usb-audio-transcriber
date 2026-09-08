@@ -8,7 +8,9 @@ REPO = "https://github.com/aaacharlie/usb-audio-transcriber"
 
 
 def section(text, version):
-    heading = re.compile(rf"^## \[?{re.escape(version)}\]?\b.*$", re.M)
+    # "1.1.0" must not match the "1.1.0-rc1" section: the version ends at a
+    # space or a closing bracket, never at a dash.
+    heading = re.compile(rf"^## \[?{re.escape(version)}\]?(?=\s|$).*$", re.M)
     match = heading.search(text)
     if not match:
         return None

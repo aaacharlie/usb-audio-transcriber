@@ -36,7 +36,7 @@ expansion and requires the four settings to name distinct locations.
 | --- | --- | --- |
 | `AUDIO_EXTS` | `mp3,wav,m4a` | Comma-separated extensions, without leading dots |
 | `RECORDER_DIR` | `RECORD` | Directory name that must directly contain a candidate recording |
-| `PURGE_DEVICE` | `0` | Set to `1` to remove a source from the recorder after verified import |
+| `PURGE_DEVICE` | `0` | Set to `1` to remove a source from the recorder after verified import. Only drives the kernel reports as removable (a USB recorder or stick) are purged; a fixed disk, a network share, or a symlink mounted under the same folders is imported but never purged |
 | `WATCH_DIRS` | empty | Colon-separated extra folders scanned recursively for audio; sources found here are never deleted |
 
 Keep `PURGE_DEVICE=0` unless device cleanup is intentional. A matching file is still deduplicated by content rather than name.
@@ -116,7 +116,7 @@ SUMMARY_COMMAND="claude -p --output-format text"
 SUMMARY_COMMAND="gemini -p \"$(cat {prompt_file})\""
 ```
 
-The command runs through `bash -c` with the prompt on standard input, in a temporary directory, with the timeout above. Whatever the tool does with the text is between you and that provider; see the privacy page.
+Inside the double quotes of a `config.env` value, write `\"` for a quote and `\\` for a backslash; the panel and the wizard do this for you when you type the command there. The command runs through `bash -c` with the prompt on standard input, in a temporary directory, with the timeout above. Whatever the tool does with the text is between you and that provider; see the privacy page.
 
 ## Session notes
 

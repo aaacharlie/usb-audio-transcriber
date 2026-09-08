@@ -11,6 +11,14 @@ UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 ICON_PATH="$DATA_HOME/icons/hicolor/scalable/apps/$APP_ID.svg"
 
+# The installer replaces bin/, prompts/, panel/, share/ and systemd/ under the
+# install root; a clone placed there would be deleting its own files.
+if [ "$(readlink -f "$SOURCE_ROOT")" = "$(readlink -f "$INSTALL_ROOT")" ]; then
+  echo "This clone sits at the install folder ($INSTALL_ROOT), which install.sh rewrites." >&2
+  echo "Move the clone somewhere else (bootstrap.sh keeps it under $INSTALL_ROOT/src) and run install.sh from there." >&2
+  exit 1
+fi
+
 WITH_DIARIZATION=0
 RUN_SETUP=1
 for arg in "$@"; do

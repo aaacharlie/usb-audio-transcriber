@@ -70,5 +70,6 @@ include = [
     "bin", "prompts", "panel", "share", "systemd", "usb_audio_transcriber", "tests", "docs",
     "config.example.env", "requirements.txt", "requirements-diarization.txt",
     "install.sh", "uninstall.sh", "bootstrap.sh", "*.md", "LICENSE",
+    ".github/release-notes.py",
 ]
 exclude = ["**/__pycache__", "docs/assets/*.png"]

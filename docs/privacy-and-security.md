@@ -30,7 +30,7 @@ Treat transcripts as potentially sensitive. Before enabling summarization, verif
 
 ## Source deletion
 
-`PURGE_DEVICE=0` is the safe default. With `PURGE_DEVICE=1`, a newly imported
+Purging applies only to removable drives (what the kernel reports as removable, which is how a USB recorder shows up); a backup disk or a network share mounted under `/media`, `/run/media`, or `/mnt` keeps every file. `PURGE_DEVICE=0` is the safe default. With `PURGE_DEVICE=1`, a newly imported
 source is removed only after a checksum-verified archive copy has been created.
 A duplicate source is removed only when the archive path recorded in SQLite
 still exists and matches the same SHA-256 digest. This is still destructive

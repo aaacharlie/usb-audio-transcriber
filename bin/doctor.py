@@ -2,8 +2,10 @@
 """Diagnose USB Audio Transcriber configuration and installation problems."""
 import argparse
 import importlib.util
+import ipaddress
 import os
 from pathlib import Path
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -93,8 +95,21 @@ def check_config(config):
         base_url = config.get("LLM_BASE_URL", "http://127.0.0.1:11434/v1").strip()
         if base_url and not base_url.startswith(("http://", "https://")):
             failures.append("LLM_BASE_URL must start with http:// or https://")
-    if backend == "command" and not config.get("SUMMARY_COMMAND", "").strip():
-        failures.append("SUMMARY_BACKEND=command needs SUMMARY_COMMAND")
+    if backend == "command":
+        command = config.get("SUMMARY_COMMAND", "").strip()
+        if not command:
+            failures.append("SUMMARY_BACKEND=command needs SUMMARY_COMMAND")
+        else:
+            try:
+                shlex.split(command)
+            except ValueError as exc:
+                failures.append(f"SUMMARY_COMMAND has unbalanced quotes ({exc})")
+    bind = config.get("PANEL_BIND", "").strip()
+    if bind and bind != "localhost":
+        try:
+            ipaddress.IPv4Address(bind)
+        except ValueError:
+            failures.append("PANEL_BIND must be an IPv4 address such as 127.0.0.1 or 0.0.0.0")
     port = config.get("PANEL_PORT", "").strip()
     if port:
         try:

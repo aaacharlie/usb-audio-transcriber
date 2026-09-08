@@ -40,7 +40,9 @@ def message(state):
         lines.append(f"Current: {current}")
     if state.get("active") and phase.startswith("Transcribing"):
         lines.append(format_eta(state.get("eta_seconds")))
-    return "\n".join(lines)
+    # zenity reads its stdin line by line: a "#" line is the new text and a
+    # bare number the percentage, so the message must stay on one line.
+    return "   |   ".join(lines)
 
 
 def desktop_available(config=None, environ=None):

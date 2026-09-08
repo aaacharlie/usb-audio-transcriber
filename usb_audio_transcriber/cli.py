@@ -165,17 +165,24 @@ def systemctl(*args, check=True):
 
 # --------------------------------------------------------------------------- install
 
-def render(template, command, icon=None):
+def render(template, command, icon=None, root=None):
     """Fill a unit or desktop template with this installation's launcher and icon.
 
     systemd and desktop entries both treat % specially in commands, so it is
     doubled there, and the path is quoted because home folders can contain
-    spaces. The icon is a plain path (Icon= takes no field codes).
+    spaces. The icon is a plain path (Icon= takes no field codes). A data root
+    other than the default is baked in, so the units and the menu entry run
+    against the same folder as the command that installed them.
     """
     quoted = '"' + str(command).replace("%", "%%") + '"'
-    return (template.replace("@CYCLE_COMMAND@", f"{quoted} cycle")
+    text = (template.replace("@CYCLE_COMMAND@", f"{quoted} cycle")
                     .replace("@PANEL_COMMAND@", f"{quoted} panel")
                     .replace("@ICON@", "" if icon is None else str(icon)))
+    if root is not None:
+        setting = f"USB_AUDIO_TRANSCRIBER_ROOT={str(root).replace('%', '%%')}"
+        text = text.replace("[Service]\n", f'[Service]\nEnvironment="{setting}"\n')
+        text = text.replace("\nExec=", f'\nExec=env "{setting}" ')
+    return text
 
 
 def has_display():
@@ -235,9 +242,10 @@ def install(args, root):
 
     units = unit_dir()
     units.mkdir(parents=True, exist_ok=True)
+    baked_root = root if root != data_home() / APP_NAME else None
     for unit in RENDERED_UNITS:
         template = (ASSETS / "systemd" / unit).read_text(encoding="utf-8")
-        (units / unit).write_text(render(template, command), encoding="utf-8")
+        (units / unit).write_text(render(template, command, root=baked_root), encoding="utf-8")
     for unit in COPIED_UNITS:
         shutil.copy(ASSETS / "systemd" / unit, units / unit)
     systemctl("daemon-reload")
@@ -253,7 +261,8 @@ def install(args, root):
     icon = icons / f"{APP_ID}.svg"
     shutil.copy(ASSETS / "share" / f"{APP_ID}.svg", icon)
     desktop = (ASSETS / "share" / f"{APP_ID}.desktop").read_text(encoding="utf-8")
-    (applications / f"{APP_ID}.desktop").write_text(render(desktop, command, icon), encoding="utf-8")
+    (applications / f"{APP_ID}.desktop").write_text(render(desktop, command, icon, baked_root),
+                                                     encoding="utf-8")
     # Earlier versions installed the entry under the plain name.
     (applications / f"{APP_NAME}.desktop").unlink(missing_ok=True)
     (icons / f"{APP_NAME}.svg").unlink(missing_ok=True)

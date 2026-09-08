@@ -34,14 +34,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import doctor as doctor_module
 import setup as setup_module
 from llm import backend_choice, backend_from_config
-from model_profiles import artifact_path, artifacts_complete, cache_path_for, \
+from model_profiles import artifact_path, completed_layout, cache_path_for, \
     directory_size, hub_cache_root, profiles_for, profiles_for_config
-from pipeline_config import ROOT, load, log, read_progress, version
+from pipeline_config import ASSETS, ROOT, load, log, read_progress, unquote, version
 
 CFG_PATH = ROOT / "config.env"
 BIN = Path(__file__).resolve().parent
 PYTHON = sys.executable
-PAGE = ROOT / "panel" / "index.html"
+PAGE = ASSETS / "panel" / "index.html"
+NONCE_LIFETIME = 60  # seconds a one-time browser link stays valid
 TOKEN_FILE = ROOT / "var" / "state" / "panel-token"
 LOG_FILE = ROOT / "var" / "logs" / "pipeline.log"
 VERSION_FILE = ROOT / "VERSION"
@@ -211,7 +212,7 @@ def raw_config(path=None):
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
+        values[key.strip()] = unquote(value)
     return values
 
 
@@ -232,6 +233,8 @@ def save_config(updates):
         if key not in KNOWN_KEYS:
             continue
         value = ("" if value is None else str(value)).strip()
+        if "\n" in value or "\r" in value:
+            return [f"{key} must not contain a line break"]
         if key in SECRET_KEYS and value == SECRET_PLACEHOLDER:
             continue
         current = raw.get(key, DEFAULTS[key])
@@ -360,7 +363,11 @@ def status():
         disk = {"free_gib": round(usage.free / 1024 ** 3, 1), "total_gib": round(usage.total / 1024 ** 3, 1)}
     except OSError:
         disk = None
-    backend = backend_choice(config)
+    try:
+        backend = backend_choice(config)
+        ready = backend_from_config(config) is not None
+    except Exception as exc:  # a hand-edited SUMMARY_* value must not blank the whole panel
+        backend, ready = f"invalid ({exc})", False
     return {
         "version": version(VERSION_FILE),
         "progress": progress,
@@ -371,7 +378,7 @@ def status():
         "counts": counts,
         "models": models,
         "disk": disk,
-        "summaries": {"backend": backend, "ready": backend_from_config(config) is not None,
+        "summaries": {"backend": backend, "ready": ready,
                       "subject": config.get("SESSION_SUBJECT", "")},
         "profile": config.get("WHISPER_MODEL_PROFILE", "fast"),
         "vault": config["VAULT_DIR"],
@@ -442,11 +449,12 @@ def recordings(limit=40):
         con.close()
     for row in rows:
         audio = Path(row["archived_to"] or "")
-        complete = audio.is_file() and artifacts_complete(audio, profile, comparison)
+        layout = completed_layout(audio, profile, comparison) if audio.is_file() else None
+        complete = layout is not None
         note = None
         if complete:
             try:
-                note = json.loads(artifact_path(audio, profile, ".complete.json", comparison)
+                note = json.loads(artifact_path(audio, profile, ".complete.json", layout)
                                   .read_text(encoding="utf-8")).get("note")
             except (OSError, json.JSONDecodeError):
                 note = None
@@ -484,7 +492,7 @@ def search(params):
         command += ["--since", since]
     if speaker:
         command += ["--speaker", speaker]
-    command += words
+    command += ["--"] + words
     result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=120)
     if result.returncode == 2:
         raise RuntimeError(result.stderr.strip() or "search failed")
@@ -657,6 +665,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def authorized_token(self, candidate):
+        try:
+            return secrets.compare_digest(candidate, self.server.token)
+        except TypeError:
+            return False
+
     def presented_token(self):
         header = self.headers.get("X-Panel-Token")
         if header:
@@ -670,10 +684,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def authorized(self):
         presented = self.presented_token()
-        return bool(presented) and secrets.compare_digest(presented, self.server.token)
+        try:
+            return bool(presented) and secrets.compare_digest(presented, self.server.token)
+        except TypeError:  # non-ASCII text cannot be a token
+            return False
 
     def read_json(self):
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return {}
         if length <= 0:
             return {}
         try:
@@ -689,15 +709,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if url.path == "/":
             supplied = params.get("token", [""])[0]
-            if supplied and secrets.compare_digest(supplied, self.server.token):
+            nonce = params.get("nonce", [""])[0]
+            if supplied and self.authorized_token(supplied) or nonce and self.server.redeem_nonce(nonce):
                 self.send_response(HTTPStatus.SEE_OTHER)
                 self.send_header("Location", "/")
-                self.send_header("Set-Cookie", f"panel_token={supplied}; HttpOnly; SameSite=Strict; Path=/")
+                self.send_header("Set-Cookie",
+                                 f"panel_token={self.server.token}; HttpOnly; SameSite=Strict; Path=/")
                 self.end_headers()
                 return None
             if not self.authorized():
                 return self.send_page(LOCKED_PAGE, HTTPStatus.UNAUTHORIZED)
-            return self.send_page(PAGE.read_text(encoding="utf-8"))
+            try:
+                page = PAGE.read_text(encoding="utf-8")
+            except OSError as exc:
+                return self.send_page(f"<p>The panel page is missing: {exc}</p>",
+                                      HTTPStatus.INTERNAL_SERVER_ERROR)
+            return self.send_page(page)
         if not url.path.startswith("/api/"):
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         if not self.authorized():
@@ -748,6 +775,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/jobs":
                 job = JOBS.start(body.get("kind", ""), body.get("params", {}))
                 return self.send_json(job, HTTPStatus.ACCEPTED)
+            if url.path == "/api/nonce":
+                return self.send_json({"nonce": self.server.issue_nonce()})
             if url.path == "/api/open":
                 target = allowed_path(body.get("path", ""))
                 if target is None:
@@ -776,11 +805,33 @@ code{background:#eee;padding:.1rem .3rem;border-radius:.2rem}</style>
 network, <code>bin/panel.py url</code> prints the link.</p>"""
 
 
+class PanelServer(ThreadingHTTPServer):
+    """The HTTP server plus the one-time nonces that open the page in a browser."""
+
+    daemon_threads = True
+
+    def __init__(self, address):
+        super().__init__(address, Handler)
+        self.token = token()
+        self.nonces = {}
+        self.nonce_lock = threading.Lock()
+
+    def issue_nonce(self):
+        with self.nonce_lock:
+            now = time.monotonic()
+            self.nonces = {n: t for n, t in self.nonces.items() if t > now}
+            nonce = secrets.token_urlsafe(24)
+            self.nonces[nonce] = now + NONCE_LIFETIME
+        return nonce
+
+    def redeem_nonce(self, nonce):
+        with self.nonce_lock:
+            expiry = self.nonces.pop(nonce, None)
+        return expiry is not None and expiry > time.monotonic()
+
+
 def make_server(host, port):
-    server = ThreadingHTTPServer((host, port), Handler)
-    server.daemon_threads = True
-    server.token = token()
-    return server
+    return PanelServer((host, port))
 
 
 def panel_url(host=None, port=None, for_network=False):
@@ -875,10 +926,26 @@ def ensure_server():
     return f"http://{probe_host}:{port}/"
 
 
+def request_nonce(base):
+    """A one-time link for the browser, so the private token never appears on a
+    command line or in a terminal; None when the server does not offer one."""
+    import urllib.request
+    request = urllib.request.Request(
+        f"{base}api/nonce", data=b"{}", method="POST",
+        headers={"X-Panel-Token": token(), "X-Requested-With": "panel",
+                 "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as reply:
+            return json.loads(reply.read().decode("utf-8")).get("nonce")
+    except Exception:
+        return None
+
+
 def open_web(base, tab=False):
     """Show the web page: a browser window where a browser can do that, else a tab."""
     import webbrowser
-    url = f"{base}?token={token()}"
+    nonce = request_nonce(base)
+    url = f"{base}?nonce={nonce}" if nonce else f"{base}?token={token()}"
     command = None if tab else app_window_command(url)
     if command:
         detached(command)
@@ -889,8 +956,8 @@ def open_web(base, tab=False):
 
 def open_panel(argv):
     base = ensure_server()
-    print(f"{base}?token={token()}")
     if argv.no_browser:
+        print(f"{base}?token={token()}")
         return 0
     if argv.browser or argv.web:
         return open_web(base, tab=argv.browser)

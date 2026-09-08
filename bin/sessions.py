@@ -6,18 +6,21 @@ note stitches them back together in order, links every transcript note, and,
 with an OpenRouter key, adds an AI summary of the whole session.
 """
 import argparse
+import fcntl
 import hashlib
 import json
+import os
 import sqlite3
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import notify
 from llm import backend_from_config, split_windows
-from model_profiles import artifact_path, artifacts_complete, profiles_for_config
-from pipeline_config import ROOT, load, log, sync_directory
+from model_profiles import artifact_path, completed_layout, profiles_for_config
+from pipeline_config import ASSETS, ROOT, load, log, sync_directory
 
 CFG = load()
 VAULT = Path(CFG["VAULT_DIR"])
@@ -36,8 +39,11 @@ BACKEND = backend_from_config(
 SUMMARY_MODEL = BACKEND.describe() if BACKEND else "none"
 SUMMARIZE = CFG.get("SESSION_SUMMARY", "1").strip() == "1" and BACKEND is not None
 SUBJECT = CFG.get("SESSION_SUBJECT", "").strip() or "the subject matter of these recordings"
+# The bundled prompt ships with the program (ASSETS), not in the data folder.
 PROMPT_FILE = Path(CFG.get("SESSION_PROMPT_FILE", "").strip()
-                   or ROOT / "prompts" / "session-summary.md")
+                   or ASSETS / "prompts" / "session-summary.md")
+LOCK_FILE = ROOT / "var" / "state" / "cycle.lock"
+LOCK_WAIT = int(os.environ.get("USB_AUDIO_TRANSCRIBER_LOCK_WAIT", "300") or 300)
 WINDOW = int(CFG.get("MAP_WINDOW_CHARS", "80000"))
 NO_BACKEND_HINT = (
     "> No AI summary was generated because no summary backend is configured. "
@@ -103,12 +109,13 @@ def load_recordings(con, digests=None):
             continue
         record = {"digest": digest, "audio": audio, "note": None, "segments": [],
                   "duration": 0.0, "status": "pending", "complete": False}
-        if artifacts_complete(audio, profile, COMPARISON):
+        layout = completed_layout(audio, profile, COMPARISON)
+        if layout is not None:
             try:
-                data = json.loads(artifact_path(audio, profile, ".json", COMPARISON)
+                data = json.loads(artifact_path(audio, profile, ".json", layout)
                                   .read_text(encoding="utf-8"))
                 marker = json.loads(
-                    artifact_path(audio, profile, ".complete.json", COMPARISON)
+                    artifact_path(audio, profile, ".complete.json", layout)
                     .read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 data, marker = {}, {}
@@ -314,10 +321,14 @@ def write_session(con, members, note=None, force=False, manual=False):
     end = max(member["end"] for member in members)
     summary_md, status = build_summary(members, force, manual)
     VAULT.mkdir(parents=True, exist_ok=True)
-    if status == "failed" and note is not None and note.exists():
-        # A re-run that fails must not replace a note that already has a summary.
-        log(f"  keeping the existing note unchanged: {note.name}")
+    if status != "ok" and note is not None and note.exists():
+        # A re-run that produced no summary (failed, no backend, disabled) must
+        # not replace a note that may already carry one.
+        log(f"  no new summary ({status}); keeping the existing note unchanged: {note.name}")
         return note
+    if note is None and any(member["digest"] in locked_digests(con) for member in members):
+        log("  a recording of this session was written by another run meanwhile; skipping")
+        return None
     note = note or unique_note_path(start)
     write_private_text(note, render_note(members, summary_md, status, ident))
     con.execute(
@@ -344,7 +355,9 @@ def auto(con):
             log(f"  session starting {members[0]['start']:%Y-%m-%d %H:%M} is still "
                 "being transcribed; waiting")
             continue
-        written.append(write_session(con, members))
+        note = write_session(con, members)
+        if note is not None:
+            written.append(note)
     if len(written) > 3:
         # A first run over history can write dozens of notes; one notification.
         notify.send("Session notes written", f"{len(written)} session notes in {VAULT.name}",
@@ -357,8 +370,19 @@ def auto(con):
     return written
 
 
+def require_backend():
+    """A manual summary with no usable backend must stop, not rewrite notes."""
+    if BACKEND is None:
+        log("No usable summary backend: pick one that is set up (SUMMARY_BACKEND, or "
+            "--backend with its settings filled in). Nothing was changed.")
+        return False
+    return True
+
+
 def retry(con):
     """Add summaries to session notes that were written without one."""
+    if not require_backend():
+        return None
     if not SUMMARIZE:
         log("Session summaries are not enabled (need SESSION_SUMMARY=1 and an API key).")
         return []
@@ -380,6 +404,8 @@ def retry(con):
 
 def summarize_selected(con, idents):
     """Summarize chosen sessions now, rewriting their notes in place."""
+    if not require_backend():
+        return None
     written = []
     for ident in idents:
         row = con.execute("SELECT members, note FROM sessions WHERE id=?", (ident,)).fetchone()
@@ -409,6 +435,31 @@ def rebuild(con, date):
     con.commit()
     log(f"Forgot {len(rows)} session(s) starting on {date}; regenerating.")
     return auto(con)
+
+
+def hold_cycle_lock():
+    """Take the cycle lock so a panel job or a terminal run never overlaps the
+    timer's cycle (duplicate notes, summaries paid twice). Inside run-cycle.sh
+    the lock is already held by the parent, which says so in the environment."""
+    if os.environ.get("USB_AUDIO_TRANSCRIBER_IN_CYCLE"):
+        return None
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(LOCK_FILE, "w")
+    deadline = time.monotonic() + LOCK_WAIT
+    announced = False
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return handle
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                handle.close()
+                raise SystemExit(f"a transcription cycle is still running after {LOCK_WAIT}s; "
+                                 "try again when it has finished")
+            if not announced:
+                log("Waiting for the running cycle to finish...")
+                announced = True
+            time.sleep(1)
 
 
 def test_backend():
@@ -464,7 +515,9 @@ def main(argv=None):
     if args.command == "test-backend":
         return test_backend()
     STATE_DB.parent.mkdir(parents=True, exist_ok=True)
+    lock = hold_cycle_lock() if args.command != "list" else None
     con = sqlite3.connect(STATE_DB)
+    outcome = 0
     try:
         init_db(con)
         if args.command == "auto":
@@ -472,14 +525,16 @@ def main(argv=None):
         elif args.command == "list":
             list_sessions(con)
         elif args.command == "retry":
-            retry(con)
+            outcome = 0 if retry(con) is not None else 1
         elif args.command == "summarize":
-            summarize_selected(con, args.id)
+            outcome = 0 if summarize_selected(con, args.id) is not None else 1
         else:
             rebuild(con, args.date)
     finally:
         con.close()
-    return 0
+        if lock is not None:
+            lock.close()
+    return outcome
 
 
 if __name__ == "__main__":
