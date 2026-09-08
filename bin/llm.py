@@ -79,7 +79,10 @@ class CommandBackend:
         self.timeout = timeout
 
     def describe(self):
-        words = shlex.split(self.template) if self.template else []
+        try:
+            words = shlex.split(self.template) if self.template else []
+        except ValueError:  # unbalanced quotes: still name the tool, the doctor reports the rest
+            words = self.template.split()
         return "command:" + (Path(words[0]).name if words else "?")
 
     def complete(self, prompt, max_tokens=None):
@@ -153,6 +156,7 @@ def backend_from_config(config, model_override=None):
 
 def split_windows(text, size):
     """Cut text into windows of roughly `size` characters at sentence ends."""
+    size = int(size) if int(size) > 0 else 80000  # a hand-edited 0 would otherwise loop forever
     windows, start = [], 0
     while start < len(text):
         end = min(start + size, len(text))

@@ -41,6 +41,23 @@ class EnabledTests(unittest.TestCase):
             self.assertTrue(notify.enabled({"NOTIFY": "1"}, {}))
 
 
+_ENVIRONMENT = None
+
+
+def setUpModule():
+    """notify.detach() wraps helpers in a systemd scope when the process runs
+    under systemd (INVOCATION_ID is set), which is the case on CI runners; the
+    tests below describe the plain, non-systemd path."""
+    global _ENVIRONMENT
+    _ENVIRONMENT = mock.patch.dict(os.environ, {})
+    _ENVIRONMENT.start()
+    os.environ.pop("INVOCATION_ID", None)
+
+
+def tearDownModule():
+    _ENVIRONMENT.stop()
+
+
 class SendTests(unittest.TestCase):
     def test_plain_notification_when_actions_are_unsupported(self):
         with mock.patch.object(notify.shutil, "which", return_value="/usr/bin/notify-send"), \

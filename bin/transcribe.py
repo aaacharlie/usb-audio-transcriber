@@ -162,7 +162,8 @@ def queue_mtime(item):
 def main():
     from faster_whisper import WhisperModel
     QUEUE.mkdir(parents=True, exist_ok=True)
-    audio_exts = {"." + entry.strip().lower() for entry in CFG["AUDIO_EXTS"].split(",")}
+    audio_exts = {"." + entry.strip().lstrip(".").lower()
+                  for entry in CFG["AUDIO_EXTS"].split(",") if entry.strip()}
     pending = sorted(
         (path for path in QUEUE.iterdir()
          if (path.is_file() or path.is_symlink()) and path.suffix.lower() in audio_exts),

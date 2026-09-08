@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pipeline_config import ROOT, has_display, load
+from pipeline_config import ROOT, has_display, load, quote
 
 OBSIDIAN_CONFIGS = (
     ".config/obsidian/obsidian.json",                                 # native package
@@ -61,19 +61,25 @@ def vaults_by_search(home=None, depth=SEARCH_DEPTH):
     home = Path.home() if home is None else Path(home)
     found = []
 
+    def is_dir(entry):
+        try:  # a stale mount or an unreadable entry near $HOME must not end the search
+            return entry.is_dir() and not entry.is_symlink()
+        except OSError:
+            return False
+
     def walk(directory, level):
         try:
             entries = list(directory.iterdir())
         except OSError:
             return
-        if any(entry.name == ".obsidian" and entry.is_dir() for entry in entries):
+        if any(entry.name == ".obsidian" and is_dir(entry) for entry in entries):
             found.append(directory)
             return
         if level >= depth:
             return
         for entry in sorted(entries):
-            if (entry.is_dir() and not entry.is_symlink()
-                    and not entry.name.startswith(".") and entry.name not in SKIP_DIRS):
+            if (is_dir(entry) and not entry.name.startswith(".")
+                    and entry.name not in SKIP_DIRS):
                 walk(entry, level + 1)
 
     walk(home, 0)
@@ -86,20 +92,29 @@ def find_vaults(home=None):
 
 
 def write_config(path, updates):
-    """Set KEY="value" lines in place, keeping every comment and other setting."""
+    """Set KEY="value" lines in place, keeping every comment and other setting.
+
+    Values are quoted the way load() reads them back, so a command with quotes in
+    it survives; a value with a line break is refused (ValueError) because the
+    second line would become another setting. A key that appears twice keeps its
+    first line and loses the rest, since load() honours the last one.
+    """
     path = Path(path)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    remaining = dict(updates)
+    rendered = {key: quote(value) for key, value in updates.items()}
+    remaining = dict(rendered)
     output = []
     for line in lines:
         stripped = line.strip()
         key = stripped.split("=", 1)[0].strip() if "=" in stripped and not stripped.startswith("#") else None
         if key in remaining:
-            output.append(f'{key}="{remaining.pop(key)}"')
+            output.append(f"{key}={remaining.pop(key)}")
+        elif key in rendered:
+            continue  # a duplicate of a key already written above
         else:
             output.append(line)
     for key, value in remaining.items():
-        output.append(f'{key}="{value}"')
+        output.append(f"{key}={value}")
     path.write_text("\n".join(output) + "\n", encoding="utf-8")
     path.chmod(0o600)
 

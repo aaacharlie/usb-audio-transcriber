@@ -71,12 +71,24 @@ def artifact_path(audio, profile, suffix, comparison=False):
     return audio.with_name(f"{audio.name}{suffix}")
 
 
+def completed_layout(audio, profile, comparison=False):
+    """The naming layout under which this recording is finished: the current
+    setting's first, then the other one (a recording transcribed before the model
+    profile was switched to or from "both"). None when it is not finished.
+
+    The value is the `comparison` flag to pass to artifact_path() for it.
+    """
+    for flag in (bool(comparison), not comparison):
+        if all(artifact_path(audio, profile, suffix, flag).is_file()
+               for suffix in (".json", ".txt", ".complete.json")):
+            return flag
+    return None
+
+
 def artifacts_complete(audio, profile, comparison=False):
-    """Return whether sidecars and the final completion marker exist."""
-    return all(
-        artifact_path(audio, profile, suffix, comparison).is_file()
-        for suffix in (".json", ".txt", ".complete.json")
-    )
+    """Return whether sidecars and the final completion marker exist, under the
+    current layout or the one the other profile setting would have used."""
+    return completed_layout(audio, profile, comparison) is not None
 
 
 def directory_size(path):
@@ -99,6 +111,8 @@ def hub_cache_root(environ=None, home=None):
     environ = os.environ if environ is None else environ
     if environ.get("HF_HUB_CACHE"):
         return Path(environ["HF_HUB_CACHE"]).expanduser()
+    if environ.get("HUGGINGFACE_HUB_CACHE"):  # the older name, still honoured by the hub
+        return Path(environ["HUGGINGFACE_HUB_CACHE"]).expanduser()
     if environ.get("HF_HOME"):
         return Path(environ["HF_HOME"]).expanduser() / "hub"
     if environ.get("XDG_CACHE_HOME"):

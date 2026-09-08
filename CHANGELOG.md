@@ -4,7 +4,23 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+Findings of the 2026-09-08 bug hunt (eleven reviewing agents, every finding reproduced or traced before it was fixed); the rest are tracked in issue #26.
+
+- pipx install: the session-summary prompt and the panel's web page were looked up in the data folder instead of the program's, so every AI summary failed and the web page crashed (`bin/sessions.py`, `bin/panel.py` now use `ASSETS`).
+- `config.env` values that contain a double quote (the Gemini command recipe, a subject with a quoted title) now survive saving and loading: the wizard and the panel write `\"` for a quote and `\\` for a backslash, and `load()` reads them back; a value with a line break is refused instead of becoming extra settings. The doctor reports a summary command with unbalanced quotes and a `PANEL_BIND` that is not an IPv4 address.
+- Switching the model profile to or from `both` no longer makes earlier transcripts vanish from search or block their session notes: completeness is checked under both naming layouts.
+- A Summarize, Retry, or Rebuild run that produces no summary (no usable backend, failure) keeps the existing note; summarizing with a backend that is not set up stops with a message and exit 1 instead of erasing summaries.
+- `PURGE_DEVICE=1` purges only from removable drives; a backup disk or a symlink under `/mnt` is imported but never deleted from. Symlinked mount points are not scanned.
+- A copy interrupted by an unplug, an I/O error, or a full disk leaves nothing behind (copies go to a temporary name and are renamed after verification), the cycle continues with the next file, and leftover partial copies are swept at the start of a cycle.
+- A file name that is not valid UTF-8 (a zip of memos made on Windows) is skipped with a message instead of crashing every cycle; hidden `._name.wav` shadow files are ignored; `AUDIO_EXTS` accepts dots and spaces the same way everywhere.
+- `sessions.py` takes the cycle lock when started from the panel or a terminal (and waits for a running cycle), so a Rebuild or Summarize overlapping the timer no longer writes duplicate notes or pays for a summary twice.
+- `install.sh` refuses to run from a clone placed at the install folder (it would delete its own files); `uninstall.sh` leaves a clone's files alone and no longer stops when the user bus is unavailable.
+- The panel's private token no longer appears on the browser's command line or in the journal: the web page opens through a one-time link, and the long-lived link is printed only on request.
+- Desktop window: names and paths containing `&` or `<` render (Pango markup is escaped), the second note viewed is formatted, `--verbose` no longer prints API keys, a failed jobs poll is retried, and folding a job row is respected while a job runs. Web page: wikilinks with `&` resolve, the backend picker follows the configured backend.
+- `search.py` waits for a busy database instead of failing, and rejects a `--since` that is not a date; words starting with a dash no longer act as options from the panel. The panel refuses a non-ASCII token and a bad `Content-Length` cleanly and shows its status even with an invalid `SUMMARY_*` value.
+- The click-to-open notification helper survives the end of the cycle unit (its own systemd scope); the progress window shows its whole message; the wizard's vault search survives an unreadable folder; a duplicated key in `config.env` is written once; a custom data root given to `usb-audio-transcriber install` is baked into the units and the menu entry; `MAP_WINDOW_CHARS=0` no longer hangs; `HUGGINGFACE_HUB_CACHE` is honoured; the release notes never take a pre-release section for the final version; the sdist carries the release-notes script its tests need.
 
 ## [1.1.0] - 2026-09-06
 

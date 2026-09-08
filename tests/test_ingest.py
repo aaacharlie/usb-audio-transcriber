@@ -84,7 +84,8 @@ class DuplicatePurgeTests(unittest.TestCase):
                 )
                 connection.commit()
             with mock.patch.object(ingest, "find_candidates", return_value=[source]), \
-                    mock.patch.object(ingest, "stable", return_value=True):
+                    mock.patch.object(ingest, "stable", return_value=True), \
+                    mock.patch.object(ingest, "removable_device", return_value=True):
                 self.assertEqual(ingest.main(), 0)
 
             self.assertFalse(source.exists())
@@ -114,7 +115,8 @@ class DuplicatePurgeTests(unittest.TestCase):
 
             self.assertTrue(source.exists())
             with mock.patch.object(ingest, "find_candidates", return_value=[source]), \
-                    mock.patch.object(ingest, "stable", return_value=True):
+                    mock.patch.object(ingest, "stable", return_value=True), \
+                    mock.patch.object(ingest, "removable_device", return_value=True):
                 self.assertEqual(ingest.main(), 0)
 
             queued = list((root / "queue").iterdir())
@@ -251,13 +253,16 @@ class SensitiveFileModeTests(unittest.TestCase):
             ingest = load_ingest(config)
             with mock.patch.object(ingest, "find_candidates", return_value=[source]), \
                     mock.patch.object(ingest, "stable", return_value=True), \
+                    mock.patch.object(ingest, "removable_device", return_value=True), \
                     mock.patch.object(
                         ingest.os, "fsync", side_effect=OSError("sync failed")
-                    ):
-                with self.assertRaisesRegex(OSError, "sync failed"):
-                    ingest.main()
+                    ), mock.patch("builtins.print") as printed:
+                self.assertEqual(ingest.main(), 0, "one bad copy must not stop the cycle")
 
             self.assertTrue(source.exists())
+            self.assertEqual(list((root / "archive").rglob("*.wav")), [], "no half copy under a real name")
+            self.assertEqual(list((root / "archive").rglob("*.partial")), [])
+            self.assertTrue(any("SKIP meeting.wav" in str(call) for call in printed.call_args_list))
 
 
 class QueueConflictTests(unittest.TestCase):

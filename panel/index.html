@@ -281,6 +281,7 @@
     $("btn-pause").textContent = paused ? "Resume automatic runs" : "Pause automatic runs";
     $("btn-pause").disabled = !s.systemd;
     renderHome();
+    fillBackendPicker();
   }
   function setPill(kind, text) { $("status-dot").className = "dot " + kind; $("status-text").textContent = text; }
 
@@ -344,8 +345,13 @@
   function backendChoice() { return $("backend-pick").value; }
   function fillBackendPicker() {
     const configured = state.status ? state.status.summaries.backend : "";
-    $("backend-pick").innerHTML = [["", "Configured backend (" + (configured || "none") + ")"], ["command", "Command-line tool (Codex, Claude Code, ...)"], ["openai", "Local model (Ollama)"], ["openrouter", "OpenRouter"]]
+    const first = "Configured backend (" + (configured || "none") + ")";
+    const pick = $("backend-pick");
+    if (pick.options.length && pick.options[0].textContent === first) return;  // unchanged
+    const chosen = pick.value;
+    pick.innerHTML = [["", first], ["command", "Command-line tool (Codex, Claude Code, ...)"], ["openai", "Local model (Ollama)"], ["openrouter", "OpenRouter"]]
       .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+    pick.value = chosen || "";
   }
   $("btn-summarize").addEventListener("click", () => {
     const ids = [...document.querySelectorAll(".pick:checked")].map((c) => c.value);
@@ -487,7 +493,8 @@
       while (i < lines.length && lines[i] !== "---") { const [k, ...v] = lines[i].split(":"); fm.push(`<span>${esc(k)}</span><span>${esc(v.join(":").trim())}</span>`); i++; }
       i++; html += `<div class="fm">${fm.join("")}</div>`;
     }
-    const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[\[([^\]]+)\]\]/g, (m, n) => `<a class="wiki" data-wiki="${esc(n)}">${esc(n)}</a>`).replace(/`([^`]+)`/g, "<code>$1</code>");
+    // esc() already ran on the whole line, so the captured link target is escaped text.
+    const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\[\[([^\]]+)\]\]/g, (m, n) => `<a class="wiki" data-wiki="${n}">${n}</a>`).replace(/`([^`]+)`/g, "<code>$1</code>");
     for (; i < lines.length; i++) {
       const line = lines[i];
       const h = line.match(/^(#{1,3})\s+(.*)/);
